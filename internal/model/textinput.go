@@ -1,0 +1,60 @@
+package model
+
+import (
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+type TextInputWrapper struct {
+	model textinput.Model
+}
+
+func NewTextInputWrapper(input textinput.Model) *TextInputWrapper {
+	return &TextInputWrapper{
+		model: input,
+	}
+}
+
+func (t *TextInputWrapper) Focus() tea.Cmd {
+	return t.model.Focus()
+}
+
+func (t *TextInputWrapper) Focused() bool {
+	return t.model.Focused()
+}
+
+func (t *TextInputWrapper) Blur() {
+	t.model.Blur()
+}
+
+func (t *TextInputWrapper) Init() tea.Cmd {
+	return nil
+}
+
+func (t *TextInputWrapper) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	t.model, cmd = t.model.Update(msg)
+	return t, cmd
+}
+
+func (t *TextInputWrapper) View() string {
+	return t.model.View()
+}
+
+func (t *TextInputWrapper) Value() string {
+	return t.model.Value()
+}
+
+func (t *TextInputWrapper) Validate() {
+	if t.model.Validate != nil {
+		t.model.Err = t.model.Validate(t.model.Value())
+	}
+}
+
+func (t *TextInputWrapper) Error() string {
+	if t.model.Err == nil {
+		return ""
+	}
+	return t.model.Err.Error()
+}
+
