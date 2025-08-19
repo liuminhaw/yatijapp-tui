@@ -2,6 +2,7 @@ package data
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -11,8 +12,29 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 )
 
+type respError []string
+
+func (r *respError) UnmarshalJSON(data []byte) error {
+	var singleError string
+	if err := json.Unmarshal(data, &singleError); err == nil {
+		*r = []string{singleError}
+		return nil
+	}
+	return json.Unmarshal(data, (*[]string)(r))
+}
+
 type ErrorResponse struct {
-	Error any `json:"error,omitempty"`
+	Err respError `json:"error,omitempty"`
+}
+
+func (e ErrorResponse) Error() string {
+	if len(e.Err) == 0 {
+		return "empty error"
+	}
+	if len(e.Err) == 1 {
+		return e.Err[0]
+	}
+	return strings.Join(e.Err, ", ")
 }
 
 type Metadata struct {

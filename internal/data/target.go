@@ -3,12 +3,9 @@ package data
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 )
-
-var FailedToLoadDataErr = errors.New("Failed to load data")
 
 type ListTargetsResponse struct {
 	Metadata Metadata `json:"metadata"`
@@ -18,20 +15,28 @@ type ListTargetsResponse struct {
 
 func ListTargets(serverURL string) ([]Target, error) {
 	// time.Sleep(3 * time.Second) // Simulate a delay for loading targets
-	// resp, err := http.Get("http://localhost:8080/v1/targets")
 	resp, err := http.Get(fmt.Sprintf("%s/v1/targets", serverURL))
 	if err != nil {
-		return []Target{}, errors.New("Failed to load data: GET Targets")
+		return []Target{}, LoadApiDataErr{
+			Err: err,
+			Msg: "API request error: GET Targets",
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return []Target{}, errors.New("Failed to load data: " + resp.Status)
+		return []Target{}, LoadApiDataErr{
+			Err: err,
+			Msg: fmt.Sprintf("Api response status error: %s", resp.Status),
+		}
 	}
 
 	var responseData ListTargetsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return []Target{}, errors.New("Failed to load data: decode response")
+		return []Target{}, LoadApiDataErr{
+			Err: err,
+			Msg: "API response decode error",
+		}
 	}
 
 	return responseData.Targets, nil
@@ -46,17 +51,26 @@ func GetTarget(serverURL, uuid string) (Target, error) {
 	// time.Sleep(3 * time.Second) // Simulate a delay for loading targets
 	resp, err := http.Get(fmt.Sprintf("%s/v1/targets/%s", serverURL, uuid))
 	if err != nil {
-		return Target{}, errors.New("Failed to load data: GET Target")
+		return Target{}, LoadApiDataErr{
+			Err: err,
+			Msg: "API request error: GET Target",
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return Target{}, fmt.Errorf("Failed to load data: %s", resp.Status)
+		return Target{}, LoadApiDataErr{
+			Err: err,
+			Msg: fmt.Sprintf("Api response status error: %s", resp.Status),
+		}
 	}
 
 	var responseData GetTargetResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return Target{}, errors.New("Failed to load data: decode response")
+		return Target{}, LoadApiDataErr{
+			Err: err,
+			Msg: "API response decode error",
+		}
 	}
 
 	responseData.Target.CreatedAt = responseData.Target.CreatedAt.Local()
@@ -72,23 +86,35 @@ func DeleteTarget(serverURL, uuid string) error {
 		nil,
 	)
 	if err != nil {
-		return errors.New("Failed to create DELETE request for target")
+		return LoadApiDataErr{
+			Err: err,
+			Msg: "Failed to create DELETE request for target",
+		}
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return errors.New("Failed to delete: DELETE target")
+		return LoadApiDataErr{
+			Err: err,
+			Msg: "API request error: DELETE target",
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return errors.New("Request failed: decoding error response")
+			return LoadApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
+			}
 		}
 
-		return fmt.Errorf("Failed to delete target: %s", responseErr.Error)
+		return LoadApiDataErr{
+			Err: responseErr,
+			Msg: fmt.Sprintf("Failed to delete target status error: %s", resp.Status),
+		}
 	}
 
 	return nil
@@ -106,7 +132,10 @@ type TargetRequestBody struct {
 func (b TargetRequestBody) Create(serverURL string) error {
 	data, err := json.Marshal(b)
 	if err != nil {
-		return errors.New("Failed to marshal request body JSON")
+		return LoadApiDataErr{
+			Err: err,
+			Msg: "Failed to create request body JSON",
+		}
 	}
 
 	resp, err := http.Post(
@@ -115,20 +144,26 @@ func (b TargetRequestBody) Create(serverURL string) error {
 		bytes.NewBuffer(data),
 	)
 	if err != nil {
-		// return fmt.Errorf("Failed to create target: %v", err)
-		return errors.New("Failed to create: POST target")
+		return LoadApiDataErr{
+			Err: err,
+			Msg: "API request error: POST target",
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			// return err
-			return errors.New("Request failed: decoding error response")
+			return LoadApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
+			}
 		}
 
-		// return fmt.Errorf("Failed to create target: %s", resp.Status)
-		return fmt.Errorf("Failed to create target: %s", responseErr.Error)
+		return LoadApiDataErr{
+			Err: responseErr,
+			Msg: fmt.Sprintf("Failed to create target status error: %s", resp.Status),
+		}
 	}
 
 	return nil
@@ -137,7 +172,10 @@ func (b TargetRequestBody) Create(serverURL string) error {
 func (b TargetRequestBody) Update(serverURL string, uuid string) error {
 	data, err := json.Marshal(b)
 	if err != nil {
-		return errors.New("Failed to marshal request body JSON")
+		return LoadApiDataErr{
+			Err: err,
+			Msg: "Failed to create request body JSON",
+		}
 	}
 
 	req, err := http.NewRequest(
@@ -146,24 +184,36 @@ func (b TargetRequestBody) Update(serverURL string, uuid string) error {
 		bytes.NewBuffer(data),
 	)
 	if err != nil {
-		return errors.New("Failed to create PATCH request for target update")
+		return LoadApiDataErr{
+			Err: err,
+			Msg: "Failed to create PATCH request for target",
+		}
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return errors.New("Failed to update: PATCH target")
+		return LoadApiDataErr{
+			Err: err,
+			Msg: "API request error: PATCH target",
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return errors.New("Request failed: decoding error response")
+			return LoadApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
+			}
 		}
 
-		return fmt.Errorf("Failed to update target: %s", responseErr.Error)
+		return LoadApiDataErr{
+			Err: responseErr,
+			Msg: fmt.Sprintf("Failed to update target status error: %s", resp.Status),
+		}
 	}
 
 	return nil

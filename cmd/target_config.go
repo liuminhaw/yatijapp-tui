@@ -135,8 +135,9 @@ func (m targetPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-	case validationErrorMsg:
-		m.err = msg
+	case data.LoadApiDataErr:
+		m.cfg.logger.Error(msg.Error(), "action", "save target")
+		m.err = errors.New(msg.Msg)
 	case tea.KeyMsg:
 		switch m.mode {
 		case style.NormalView:
@@ -179,6 +180,9 @@ func (m targetPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+	// unexpectedApiResponseMsg, validationErrorMsg
+	case error:
+		m.err = msg
 	}
 
 	for i, field := range m.fields {
@@ -337,11 +341,9 @@ func (m targetPage) create() tea.Cmd {
 	}
 
 	if err := request.Create(m.cfg.serverURL); err != nil {
-		// TODO: modify the return command, this is just a placeholder
-		return validationErrorCmd(err)
+		return func() tea.Msg { return apiErrorResponseCmd(err) }
 	}
 
-	// return apiSuccessResponseCmd("Target created successfully")
 	return apiSuccessResponseCmd("Target created successfully", m.prev)
 }
 
@@ -372,10 +374,8 @@ func (m targetPage) update() tea.Cmd {
 	}
 
 	if err := request.Update(m.cfg.serverURL, m.uuid); err != nil {
-		// TODO: modify the return command, this is just a placeholder
-		return validationErrorCmd(err)
+		return func() tea.Msg { return apiErrorResponseCmd(err) }
 	}
 
-	// return apiSuccessResponseCmd("Target updated successfully")
 	return apiSuccessResponseCmd("Target updated successfully", m.prev)
 }

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -75,7 +77,7 @@ func (t targetViewPage) deleteTarget(uuid, msg string) tea.Cmd {
 	return func() tea.Msg {
 		t.clearMsg()
 		if err := data.DeleteTarget(serverURL, uuid); err != nil {
-			return apiResponseErrorMsg(err)
+			return apiErrorResponseCmd(err)
 		}
 
 		return targetDeletedMsg(msg)
@@ -131,14 +133,20 @@ func (t targetViewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case getTargetLoadedMsg:
 		t.target = data.Target(msg.target)
 		if err := t.renderViewport(); err != nil {
-			// return t, func() tea.Msg { return getTargetLoadingErrorMsg(err) }
-			return t, func() tea.Msg { return apiResponseErrorMsg(err) }
+			return t, internalErrorCmd("failed to render target view", err)
 		}
 		t.msg = msg.msg
 		t.loading = false
 	case targetDeletedMsg:
 		return t, switchToPreviousCmd(t.prev)
-	case apiResponseErrorMsg:
+	case internalErrorMsg:
+		t.error = errors.New(msg.msg)
+		t.loading = false
+	case data.LoadApiDataErr:
+		t.cfg.logger.Error(msg.Error(), slog.String("action", "load target"))
+		t.error = errors.New(msg.Msg)
+		t.loading = false
+	case unexpectedApiResponseMsg:
 		t.error = msg
 		t.loading = false
 	case spinner.TickMsg:

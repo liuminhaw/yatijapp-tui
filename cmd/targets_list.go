@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/paginator"
@@ -58,7 +60,7 @@ func (t targetListPage) loadTargetListPage(msg string) tea.Cmd {
 
 		targets, err := data.ListTargets(t.cfg.serverURL)
 		if err != nil {
-			return apiResponseErrorMsg(err)
+			return apiErrorResponseCmd(err)
 		}
 
 		return targetListLoadedMsg{
@@ -85,7 +87,7 @@ func (t targetListPage) deleteTarget(uuid, msg string) tea.Cmd {
 		t.clearMsg()
 		err := data.DeleteTarget(serverURL, uuid)
 		if err != nil {
-			return apiResponseErrorMsg(err)
+			return apiErrorResponseCmd(err)
 		}
 
 		return targetDeletedMsg(msg)
@@ -119,7 +121,7 @@ func (t targetListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.confirmation != nil {
 			switch msg.String() {
 			case "y":
-				t.confirmation = nil	
+				t.confirmation = nil
 				return t, t.deleteTarget(t.targets[t.selected].UUID, "Target deleted successfully")
 			case "n":
 				t.confirmation = nil
@@ -168,7 +170,6 @@ func (t targetListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			t.clearMsg()
 			t.helper = !t.helper
-			// return t, switchToHelperListCmd
 		case "v":
 			return t, switchToTargetViewCmd(t.targets[t.selected].UUID)
 		case "e":
@@ -183,12 +184,9 @@ func (t targetListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return t, switchToTargetsCmd
 		}
 	case targetListLoadedMsg:
-		// t.targets = []data.Target(msg)
 		t.msg = msg.msg
 		t.targets = msg.targets
 		t.paginator.SetTotalPages(len(t.targets))
-		// status.promptStyle().Render(status.prompt),
-		// status.contentStyle().Render(status.content),
 		t.loading = false
 	case getTargetLoadedMsg:
 		t.loading = false
@@ -197,7 +195,11 @@ func (t targetListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, t.loadTargetListPage(string(msg))
 	case confirmationMsg:
 		t.loading = false
-	case apiResponseErrorMsg:
+	case data.LoadApiDataErr:
+		t.cfg.logger.Error(msg.Error(), slog.String("action", "load targets list"))
+		t.error = errors.New(msg.Msg)
+		t.loading = false
+	case unexpectedApiResponseMsg:
 		t.error = msg
 		t.loading = false
 	case spinner.TickMsg:

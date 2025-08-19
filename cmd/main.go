@@ -2,9 +2,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"log/slog"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type Focusable interface {
@@ -26,6 +30,7 @@ type termSize struct {
 
 type config struct {
 	serverURL string // http://yatijapp.server.url
+	logger    *slog.Logger
 }
 
 func main() {
@@ -39,6 +44,21 @@ func main() {
 	)
 	flag.Parse()
 
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println("Error getting home directory:", err)
+		os.Exit(1)
+	}
+
+	rotater := &lumberjack.Logger{
+		Filename:   fmt.Sprintf("%s/.yatijapp/tui.log", homeDir),
+		MaxSize:    100,
+		MaxBackups: 3,
+		MaxAge:     30,
+		Compress:   false,
+	}
+	cfg.logger = slog.New(slog.NewJSONHandler(rotater, nil))
+
 	p := tea.NewProgram(newMainModel(cfg), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		panic(err)
@@ -48,8 +68,7 @@ func main() {
 type mainModel struct {
 	cfg config
 
-	menu menuPage
-	// targets        targetListPage
+	menu           menuPage
 	targetSettings targetPage
 	active         tea.Model
 	width          int
@@ -57,13 +76,11 @@ type mainModel struct {
 }
 
 func newMainModel(cfg config) mainModel {
-	// target := newTargetPage()
 	menu := newMenuPage()
 
 	return mainModel{
-		cfg:  cfg,
-		menu: menu,
-		// targetSettings: target,
+		cfg:    cfg,
+		menu:   menu,
 		active: menu,
 	}
 }
@@ -135,39 +152,3 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m mainModel) View() string {
 	return m.active.View()
 }
-
-// type viewField struct {
-// 	prompt  string
-// 	content string
-// 	focused bool
-// }
-//
-// // func newViewField(prompt, content string, focused bool) viewField {
-// func newViewField(prompt string, field Focusable) viewField {
-// 	// field := viewField{
-// 	// 	prompt:  prompt,
-// 	// 	content: content,
-// 	// 	focused: focused,
-// 	// }
-//
-// 	return viewField{
-// 		prompt:  prompt,
-// 		content: field.View(),
-// 		focused: field.Focused(),
-// 	}
-// }
-//
-// func (f viewField) contentStyle() lipgloss.Style {
-// 	return style.InputStyle.Document
-// }
-//
-// func (f viewField) promptStyle() lipgloss.Style {
-// 	if f.focused {
-// 		return style.InputStyle.Selected
-// 	}
-// 	return style.InputStyle.Prompt
-// }
-//
-// func (f viewField) helperStyle() lipgloss.Style {
-// 	return style.InputStyle.Helper
-// }

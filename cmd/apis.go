@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
 )
@@ -16,11 +18,11 @@ type (
 	}
 	targetDeletedMsg string
 
-	apiResponseErrorMsg    error
 	apiSuccessResponseMsg struct {
 		msg      string
 		redirect tea.Model
 	}
+	unexpectedApiResponseMsg error
 )
 
 func apiSuccessResponseCmd(msg string, model tea.Model) tea.Cmd {
@@ -32,10 +34,19 @@ func apiSuccessResponseCmd(msg string, model tea.Model) tea.Cmd {
 	}
 }
 
+func apiErrorResponseCmd(err error) tea.Msg {
+	var le data.LoadApiDataErr
+	if errors.As(err, &le) {
+		return le
+	} else {
+		return unexpectedApiResponseMsg(err)
+	}
+}
+
 func loadTarget(serverURL, uuid, msg string) tea.Msg {
 	target, err := data.GetTarget(serverURL, uuid)
 	if err != nil {
-		return apiResponseErrorMsg(err)
+		return apiErrorResponseCmd(err)
 	}
 
 	return getTargetLoadedMsg{
