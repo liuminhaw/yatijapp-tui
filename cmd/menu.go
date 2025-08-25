@@ -1,36 +1,68 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/liuminhaw/yatijapp-tui/colors"
 	"github.com/liuminhaw/yatijapp-tui/internal/components"
+	"github.com/liuminhaw/yatijapp-tui/internal/data"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 )
 
 type menuPage struct {
+	cfg config
+
 	title string
-	views components.Radio
+	view  components.Radio
+
+	authView   components.Radio
+	unauthView components.Radio
 
 	width  int
 	height int
+
+	spinner spinner.Model
+	loading bool
+
+	// msg string
+	error error
 }
 
-func newMenuPage() menuPage {
-	viewOptions := components.NewRadio(
-		[]string{"Targets", "Activities", "Sessions"},
-		components.RadioListView,
-	)
-	viewOptions.Focus() // Set focus on the menu view
-
+func newMenuPage(cfg config, width, height int) menuPage {
 	return menuPage{
-		title: menuTitle(),
-		views: viewOptions,
+		cfg:        cfg,
+		title:      menuTitle(),
+		authView:   menuView([]string{"Targets", "Activities", "Sessions"}),
+		unauthView: menuView([]string{"Sign in", "Sign up"}),
+		width:      width,
+		height:     height,
+		spinner:    spinner.New(spinner.WithSpinner(spinner.Meter)),
+		loading:    true,
+	}
+}
+
+func (m menuPage) loadLoginUser() tea.Cmd {
+	return func() tea.Msg {
+		user, err := data.GetCurrentUser(m.cfg.serverURL, m.cfg.authClient)
+		if err != nil {
+			return apiErrorResponseCmd(err)
+		}
+
+		return apiSuccessResponseMsg{
+			msg:      user.Name,
+			redirect: m,
+		}
 	}
 }
 
 func (m menuPage) Init() tea.Cmd {
-	return nil
+	return tea.Batch(m.spinner.Tick, m.loadLoginUser())
 }
 
 func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -45,7 +77,7 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "enter":
-			switch m.views.Selected() {
+			switch m.view.Selected() {
 			case "Targets":
 				return m, switchToTargetsCmd
 			case "Activities":
@@ -54,14 +86,58 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, switchToSessionsCmd
 			}
 		}
+	case apiSuccessResponseMsg:
+		m.view = m.authView
+		m.loading = false
+	case data.LoadApiDataErr:
+		switch msg.Status {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			m.view = m.unauthView
+		default:
+			m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "load login user"))
+			m.error = errors.New(msg.Msg)
+		}
+		m.loading = false
+	case unexpectedApiResponseMsg:
+		m.error = msg
+		m.loading = false
+	case spinner.TickMsg:
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	}
 
-	m.views, cmd = m.views.Update(msg)
+	m.view, cmd = m.view.Update(msg)
 
 	return m, cmd
 }
 
 func (m menuPage) View() string {
+	if m.error != nil {
+		container := lipgloss.JoinVertical(
+			lipgloss.Center,
+			style.TitleBarView("Menu", viewWidth, false),
+			style.ErrorView(
+				style.ViewSize{Width: 80, Height: 10},
+				m.error,
+				[]style.HelperContent{{Key: "q", Action: "quit"}},
+			),
+		)
+
+		return style.ContainerStyle(m.width, container, 5).Render(container)
+	}
+
+	if m.loading {
+		msg := style.DocumentStyle.Normal.Bold(true).Render("Yatijapp")
+		m.spinner.Style = style.DocumentStyle.Highlight
+		container := lipgloss.NewStyle().
+			Width(50).
+			Height(10).
+			Align(lipgloss.Center, lipgloss.Center).
+			Render(fmt.Sprintf("%s %s", m.spinner.View(), msg))
+
+		return style.ContainerStyle(m.width, container, 5).Render(container)
+	}
+
 	menuTitle := lipgloss.NewStyle().
 		Width(20).
 		Padding(1, 2).
@@ -77,7 +153,7 @@ func (m menuPage) View() string {
 			AlignVertical(lipgloss.Center).
 			Height(lipgloss.Height(menuTitle)).
 			Margin(0, 1).
-			Render(m.views.View()),
+			Render(m.view.View()),
 	)
 
 	helperView := style.HelperView([]style.HelperContent{
@@ -115,4 +191,11 @@ func menuTitle() string {
 		highlight.Render("J")+normal.Render("ournaling"),
 		highlight.Render("App")+normal.Render("lication"),
 	)
+}
+
+func menuView(options []string) components.Radio {
+	radio := components.NewRadio(options, components.RadioListView)
+	radio.Focus()
+
+	return radio
 }

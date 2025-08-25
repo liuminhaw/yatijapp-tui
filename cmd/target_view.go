@@ -42,8 +42,6 @@ func newTargetViewPage(
 	termSize, vpSize style.ViewSize,
 	prev tea.Model,
 ) targetViewPage {
-	s := spinner.New()
-
 	vp := viewport.New(vpSize.Width, vpSize.Height)
 	vp.Style = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
@@ -55,7 +53,7 @@ func newTargetViewPage(
 		viewport: vp,
 		width:    termSize.Width,
 		height:   termSize.Height,
-		spinner:  s,
+		spinner:  spinner.New(spinner.WithSpinner(spinner.Line)),
 		loading:  true,
 		prev:     prev,
 	}
@@ -67,7 +65,7 @@ func (t targetViewPage) loadTarget(uuid string, msg string) tea.Cmd {
 	return func() tea.Msg {
 		t.clearMsg()
 
-		return loadTarget(serverURL, uuid, msg)
+		return loadTarget(serverURL, uuid, msg, t.cfg.authClient)
 	}
 }
 
@@ -76,7 +74,7 @@ func (t targetViewPage) deleteTarget(uuid, msg string) tea.Cmd {
 
 	return func() tea.Msg {
 		t.clearMsg()
-		if err := data.DeleteTarget(serverURL, uuid); err != nil {
+		if err := data.DeleteTarget(serverURL, uuid, t.cfg.authClient); err != nil {
 			return apiErrorResponseCmd(err)
 		}
 
@@ -143,7 +141,7 @@ func (t targetViewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.error = errors.New(msg.msg)
 		t.loading = false
 	case data.LoadApiDataErr:
-		t.cfg.logger.Error(msg.Error(), slog.String("action", "load target"))
+		t.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "load target"))
 		t.error = errors.New(msg.Msg)
 		t.loading = false
 	case unexpectedApiResponseMsg:
@@ -170,7 +168,11 @@ func (t targetViewPage) View() string {
 		container := lipgloss.JoinVertical(
 			lipgloss.Center,
 			title,
-			style.ErrorView(style.ViewSize{Width: 80, Height: 10}, t.error, true),
+			style.ErrorView(
+				style.ViewSize{Width: 80, Height: 10},
+				t.error,
+				[]style.HelperContent{{Key: "<", Action: "back"}},
+			),
 		)
 
 		return style.ContainerStyle(t.width, container, 5).Render(container)

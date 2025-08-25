@@ -18,15 +18,13 @@ type (
 	confirmationMsg struct{}
 
 	validationErrorMsg error
-	internalErrorMsg struct {
+	internalErrorMsg   struct {
 		msg string
 		err error
 	}
 )
 
-var (
-	confirmationCmd = func() tea.Msg { return confirmationMsg{} }
-)
+var confirmationCmd = func() tea.Msg { return confirmationMsg{} }
 
 func (m internalErrorMsg) Error() string {
 	return m.msg + ": " + m.err.Error()

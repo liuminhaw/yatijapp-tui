@@ -1,8 +1,9 @@
 package data
 
 type LoadApiDataErr struct {
-	Err error
-	Msg string
+	Status int
+	Err    error
+	Msg    string
 }
 
 func (e LoadApiDataErr) Error() string {

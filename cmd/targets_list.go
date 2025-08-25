@@ -42,14 +42,12 @@ func newTargetListPage(cfg config, width, height int) targetListPage {
 	p.ActiveDot = lipgloss.NewStyle().Foreground(colors.DocumentText).Render("•")
 	p.InactiveDot = lipgloss.NewStyle().Foreground(colors.HelperTextDim).Render("•")
 
-	s := spinner.New()
-
 	return targetListPage{
 		cfg:       cfg,
 		paginator: p,
 		width:     width,
 		height:    height,
-		spinner:   s,
+		spinner:   spinner.New(spinner.WithSpinner(spinner.Line)),
 		loading:   true,
 	}
 }
@@ -58,7 +56,7 @@ func (t targetListPage) loadTargetListPage(msg string) tea.Cmd {
 	return func() tea.Msg {
 		t.clearMsg()
 
-		targets, err := data.ListTargets(t.cfg.serverURL)
+		targets, err := data.ListTargets(t.cfg.serverURL, t.cfg.authClient)
 		if err != nil {
 			return apiErrorResponseCmd(err)
 		}
@@ -76,7 +74,7 @@ func (t targetListPage) loadTarget(uuid string, msg string) tea.Cmd {
 	return func() tea.Msg {
 		t.clearMsg()
 
-		return loadTarget(serverURL, uuid, msg)
+		return loadTarget(serverURL, uuid, msg, t.cfg.authClient)
 	}
 }
 
@@ -85,7 +83,7 @@ func (t targetListPage) deleteTarget(uuid, msg string) tea.Cmd {
 
 	return func() tea.Msg {
 		t.clearMsg()
-		err := data.DeleteTarget(serverURL, uuid)
+		err := data.DeleteTarget(serverURL, uuid, t.cfg.authClient)
 		if err != nil {
 			return apiErrorResponseCmd(err)
 		}
@@ -166,6 +164,10 @@ func (t targetListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.paginator.PrevPage()
 			t.selected, _ = t.paginator.GetSliceBounds(len(t.targets))
 		case "<":
+			if t.error != nil {
+				t.error = nil
+				return t, nil
+			}
 			return t, switchToMenuCmd
 		case "?":
 			t.clearMsg()
@@ -196,7 +198,7 @@ func (t targetListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case confirmationMsg:
 		t.loading = false
 	case data.LoadApiDataErr:
-		t.cfg.logger.Error(msg.Error(), slog.String("action", "load targets list"))
+		t.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "targets list"))
 		t.error = errors.New(msg.Msg)
 		t.loading = false
 	case unexpectedApiResponseMsg:
@@ -214,16 +216,20 @@ func (t targetListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (t targetListPage) View() string {
 	var title string
 	if t.msg == "" {
-		title = style.TitleBarView("Targets", 80, false)
+		title = style.TitleBarView("Targets", viewWidth, false)
 	} else {
-		title = style.TitleBarView(t.msg, 80, true)
+		title = style.TitleBarView(t.msg, viewWidth, true)
 	}
 
 	if t.error != nil {
 		container := lipgloss.JoinVertical(
 			lipgloss.Center,
 			title,
-			style.ErrorView(style.ViewSize{Width: 80, Height: 10}, t.error, true),
+			style.ErrorView(
+				style.ViewSize{Width: 80, Height: 10},
+				t.error,
+				[]style.HelperContent{{Key: "<", Action: "back"}},
+			),
 		)
 
 		return style.ContainerStyle(t.width, container, 5).Render(container)

@@ -110,3 +110,9 @@ func (t Target) ListItemView(chosen bool, width int) string {
 
 	return stringBuilder.String()
 }
+
+type User struct {
+	UUID  string `json:"uuid"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}

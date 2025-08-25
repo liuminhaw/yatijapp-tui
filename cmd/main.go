@@ -4,9 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -23,14 +26,11 @@ type Focusable interface {
 	Error() string
 }
 
-type termSize struct {
-	width  int
-	height int
-}
-
 type config struct {
 	serverURL string // http://yatijapp.server.url
 	logger    *slog.Logger
+
+	authClient *authclient.AuthClient
 }
 
 func main() {
@@ -59,6 +59,12 @@ func main() {
 	}
 	cfg.logger = slog.New(slog.NewJSONHandler(rotater, nil))
 
+	cfg.authClient = &authclient.AuthClient{
+		Client:    http.DefaultClient,
+		Refresh:   authclient.RefreshToken(cfg.serverURL),
+		TokenPath: filepath.Join(homeDir, ".yatijapp", "creds", "token.json"),
+	}
+
 	p := tea.NewProgram(newMainModel(cfg), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		panic(err)
@@ -66,9 +72,9 @@ func main() {
 }
 
 type mainModel struct {
-	cfg config
+	cfg   config
+	ready bool
 
-	menu           menuPage
 	targetSettings targetPage
 	active         tea.Model
 	width          int
@@ -76,32 +82,31 @@ type mainModel struct {
 }
 
 func newMainModel(cfg config) mainModel {
-	menu := newMenuPage()
-
 	return mainModel{
-		cfg:    cfg,
-		menu:   menu,
-		active: menu,
+		cfg: cfg,
 	}
 }
 
 func (m mainModel) Init() tea.Cmd {
-	return m.active.Init()
+	return nil
 }
 
 func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	// var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if !m.ready {
+			m.ready = true
+			return m, switchToMenuCmd
+		}
 	case switchToPreviousMsg:
 		m.active = msg.model
 	case switchToMenuMsg:
-		m.active = m.menu
-		return m, sendWindowSizeCmd(m.width, m.height)
+		m.active = newMenuPage(m.cfg, m.width, m.height)
+		return m, m.active.Init()
 	case switchToTargetsMsg:
 		m.active = newTargetListPage(m.cfg, m.width, m.height)
 		return m, m.active.Init()
@@ -144,11 +149,16 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.active = msg.redirect
 	}
 
-	m.active, cmd = m.active.Update(msg)
+	if m.active != nil {
+		m.active, cmd = m.active.Update(msg)
+	}
 
 	return m, cmd
 }
 
 func (m mainModel) View() string {
+	if m.active == nil {
+		return "Loading..."
+	}
 	return m.active.View()
 }

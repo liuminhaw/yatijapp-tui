@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -56,7 +57,6 @@ func newTargetPage(
 		validator.ValidateRequired("title is required"),
 		validator.ValidateReachMaxLength(80),
 	)
-	// focusables = append(focusables, model.NewTextInputWrapper(name))
 
 	due := textinput.New()
 	due.Placeholder = "YYYY-MM-DD"
@@ -66,7 +66,6 @@ func newTargetPage(
 		validator.ValidateDate(validator.ValidFormats),
 		validator.ValidateDateAfter(time.Now().AddDate(0, 0, -1)),
 	)
-	// focusables = append(focusables, model.NewTextInputWrapper(due))
 
 	description := textinput.New()
 	description.Prompt = ""
@@ -74,13 +73,10 @@ func newTargetPage(
 	description.Width = formWidth - 1
 	description.CharLimit = 200
 	description.Validate = validator.ValidateReachMaxLength(200)
-	// focusables = append(focusables, model.NewTextInputWrapper(description))
 
 	status := model.NewStatusModel([]string{"queued", "in progress", "completed", "canceled"})
-	// focusables = append(focusables, status)
 
 	note := model.NewNoteModel()
-	// focusables = append(focusables, note)
 
 	var uuid string
 	targetAction := cmdCreate
@@ -136,7 +132,7 @@ func (m targetPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case data.LoadApiDataErr:
-		m.cfg.logger.Error(msg.Error(), "action", "save target")
+		m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "save target"))
 		m.err = errors.New(msg.Msg)
 	case tea.KeyMsg:
 		switch m.mode {
@@ -290,7 +286,7 @@ func (m targetPage) View() string {
 
 	helperView := style.HelperView(helperContent, viewWidth, m.mode)
 
-	msgView := style.ErrorView(style.ViewSize{Width: viewWidth, Height: 1}, m.err, false)
+	msgView := style.ErrorView(style.ViewSize{Width: viewWidth, Height: 1}, m.err, nil)
 
 	container := lipgloss.JoinVertical(
 		lipgloss.Center,
@@ -340,7 +336,7 @@ func (m targetPage) create() tea.Cmd {
 		request.DueDate = &dueDateTyped
 	}
 
-	if err := request.Create(m.cfg.serverURL); err != nil {
+	if err := request.Create(m.cfg.serverURL, m.cfg.authClient); err != nil {
 		return func() tea.Msg { return apiErrorResponseCmd(err) }
 	}
 
@@ -373,7 +369,7 @@ func (m targetPage) update() tea.Cmd {
 		request.DueDate = &dueDateTyped
 	}
 
-	if err := request.Update(m.cfg.serverURL, m.uuid); err != nil {
+	if err := request.Update(m.cfg.serverURL, m.uuid, m.cfg.authClient); err != nil {
 		return func() tea.Msg { return apiErrorResponseCmd(err) }
 	}
 

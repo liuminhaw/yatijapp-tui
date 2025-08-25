@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
 )
 
@@ -43,8 +44,8 @@ func apiErrorResponseCmd(err error) tea.Msg {
 	}
 }
 
-func loadTarget(serverURL, uuid, msg string) tea.Msg {
-	target, err := data.GetTarget(serverURL, uuid)
+func loadTarget(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Msg {
+	target, err := data.GetTarget(serverURL, uuid, client)
 	if err != nil {
 		return apiErrorResponseCmd(err)
 	}

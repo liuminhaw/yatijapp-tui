@@ -20,7 +20,6 @@ type ViewSize struct {
 	Height int
 }
 
-// func TitleBarView(topic string, width int) string {
 func TitleBarView(content string, width int, msg bool) string {
 	var title string
 	if msg {
@@ -43,7 +42,6 @@ func LoadingView(s *spinner.Model, title string, sizing ViewSize) string {
 	helper := HelperView([]HelperContent{{Key: "<", Action: "back"}}, sizing.Width, NormalView)
 
 	msg := DocumentStyle.Normal.Bold(true).Render("loading...")
-	s.Spinner = spinner.Line
 	s.Style = DocumentStyle.Highlight
 
 	return lipgloss.JoinVertical(
@@ -126,7 +124,7 @@ func MsgView(sizing ViewSize, msg string) string {
 		Render(msg)
 }
 
-func ErrorView(sizing ViewSize, err error, withHelp bool) string {
+func ErrorView(sizing ViewSize, err error, helpMsg []HelperContent) string {
 	var msg string
 	if err != nil {
 		msg = ErrorStyle.Render("Error: " + err.Error())
@@ -138,8 +136,8 @@ func ErrorView(sizing ViewSize, err error, withHelp bool) string {
 		Align(lipgloss.Center, lipgloss.Center).
 		Render(msg)
 
-	if withHelp {
-		helper := HelperView([]HelperContent{{Key: "<", Action: "back"}}, sizing.Width, NormalView)
+	if helpMsg != nil {
+		helper := HelperView(helpMsg, sizing.Width, NormalView)
 		return lipgloss.JoinVertical(
 			lipgloss.Center,
 			errMsg,

@@ -3,8 +3,11 @@ package data
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
 )
 
 type ListTargetsResponse struct {
@@ -13,29 +16,60 @@ type ListTargetsResponse struct {
 	Error    string   `json:"error,omitempty"`
 }
 
-func ListTargets(serverURL string) ([]Target, error) {
+func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, error) {
 	// time.Sleep(3 * time.Second) // Simulate a delay for loading targets
-	resp, err := http.Get(fmt.Sprintf("%s/v1/targets", serverURL))
+
+	req, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("%s/v1/targets", serverURL),
+		nil,
+	)
 	if err != nil {
 		return []Target{}, LoadApiDataErr{
 			Err: err,
-			Msg: "API request error: GET Targets",
+			Msg: "Failed to create GET request for Targets",
+		}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.As(err, &authclient.ErrInvalidToken{}) {
+			return []Target{}, LoadApiDataErr{
+				Status: http.StatusUnauthorized,
+				Err:    err,
+				Msg:    err.Error(),
+			}
+		}
+		return []Target{}, LoadApiDataErr{
+			Err: err,
+			Msg: "API request error: GET Current User",
 		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		var responseErr ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
+			return []Target{}, LoadApiDataErr{
+				Status: resp.StatusCode,
+				Err:    err,
+				Msg:    "API error response decode failure",
+			}
+		}
+
 		return []Target{}, LoadApiDataErr{
-			Err: err,
-			Msg: fmt.Sprintf("Api response status error: %s", resp.Status),
+			Status: resp.StatusCode,
+			Err:    responseErr,
+			Msg:    responseErr.Error(),
 		}
 	}
 
 	var responseData ListTargetsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
 		return []Target{}, LoadApiDataErr{
-			Err: err,
-			Msg: "API response decode error",
+			Status: resp.StatusCode,
+			Err:    err,
+			Msg:    "API response decode error",
 		}
 	}
 
@@ -47,10 +81,30 @@ type GetTargetResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func GetTarget(serverURL, uuid string) (Target, error) {
+func GetTarget(serverURL, uuid string, client *authclient.AuthClient) (Target, error) {
 	// time.Sleep(3 * time.Second) // Simulate a delay for loading targets
-	resp, err := http.Get(fmt.Sprintf("%s/v1/targets/%s", serverURL, uuid))
+
+	req, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("%s/v1/targets/%s", serverURL, uuid),
+		nil,
+	)
 	if err != nil {
+		return Target{}, LoadApiDataErr{
+			Err: err,
+			Msg: "Failed to create GET request for Target",
+		}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.As(err, &authclient.ErrInvalidToken{}) {
+			return Target{}, LoadApiDataErr{
+				Status: http.StatusUnauthorized,
+				Err:    err,
+				Msg:    err.Error(),
+			}
+		}
 		return Target{}, LoadApiDataErr{
 			Err: err,
 			Msg: "API request error: GET Target",
@@ -59,17 +113,28 @@ func GetTarget(serverURL, uuid string) (Target, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		var responseErr ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
+			return Target{}, LoadApiDataErr{
+				Status: resp.StatusCode,
+				Err:    err,
+				Msg:    "API error response decode failure",
+			}
+		}
+
 		return Target{}, LoadApiDataErr{
-			Err: err,
-			Msg: fmt.Sprintf("Api response status error: %s", resp.Status),
+			Status: resp.StatusCode,
+			Err:    responseErr,
+			Msg:    responseErr.Error(),
 		}
 	}
 
 	var responseData GetTargetResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
 		return Target{}, LoadApiDataErr{
-			Err: err,
-			Msg: "API response decode error",
+			Status: resp.StatusCode,
+			Err:    err,
+			Msg:    "API response decode error",
 		}
 	}
 
@@ -79,7 +144,7 @@ func GetTarget(serverURL, uuid string) (Target, error) {
 	return responseData.Target, nil
 }
 
-func DeleteTarget(serverURL, uuid string) error {
+func DeleteTarget(serverURL, uuid string, client *authclient.AuthClient) error {
 	req, err := http.NewRequest(
 		http.MethodDelete,
 		fmt.Sprintf("%s/v1/targets/%s", serverURL, uuid),
@@ -92,12 +157,18 @@ func DeleteTarget(serverURL, uuid string) error {
 		}
 	}
 
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		if errors.As(err, &authclient.ErrInvalidToken{}) {
+			return LoadApiDataErr{
+				Status: http.StatusUnauthorized,
+				Err:    err,
+				Msg:    err.Error(),
+			}
+		}
 		return LoadApiDataErr{
 			Err: err,
-			Msg: "API request error: DELETE target",
+			Msg: "API request error: DELETE Target",
 		}
 	}
 	defer resp.Body.Close()
@@ -106,14 +177,16 @@ func DeleteTarget(serverURL, uuid string) error {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
 			return LoadApiDataErr{
-				Err: err,
-				Msg: "API error response decode failure",
+				Status: resp.StatusCode,
+				Err:    err,
+				Msg:    "API error response decode failure",
 			}
 		}
 
 		return LoadApiDataErr{
-			Err: responseErr,
-			Msg: fmt.Sprintf("Failed to delete target status error: %s", resp.Status),
+			Status: resp.StatusCode,
+			Err:    responseErr,
+			Msg:    responseErr.Error(),
 		}
 	}
 
@@ -123,13 +196,12 @@ func DeleteTarget(serverURL, uuid string) error {
 type TargetRequestBody struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	// DueDate     *time.Time `json:"due_date,omitempty"`
-	DueDate *Date  `json:"due_date,omitempty"`
-	Notes   string `json:"notes"`
-	Status  string `json:"status"`
+	DueDate     *Date  `json:"due_date,omitempty"`
+	Notes       string `json:"notes"`
+	Status      string `json:"status"`
 }
 
-func (b TargetRequestBody) Create(serverURL string) error {
+func (b TargetRequestBody) Create(serverURL string, client *authclient.AuthClient) error {
 	data, err := json.Marshal(b)
 	if err != nil {
 		return LoadApiDataErr{
@@ -138,15 +210,31 @@ func (b TargetRequestBody) Create(serverURL string) error {
 		}
 	}
 
-	resp, err := http.Post(
+	req, err := http.NewRequest(
+		http.MethodPost,
 		fmt.Sprintf("%s/v1/targets", serverURL),
-		"application/json",
 		bytes.NewBuffer(data),
 	)
 	if err != nil {
 		return LoadApiDataErr{
 			Err: err,
-			Msg: "API request error: POST target",
+			Msg: "Failed to create POST request for target",
+		}
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.As(err, &authclient.ErrInvalidToken{}) {
+			return LoadApiDataErr{
+				Status: http.StatusUnauthorized,
+				Err:    err,
+				Msg:    err.Error(),
+			}
+		}
+		return LoadApiDataErr{
+			Err: err,
+			Msg: "API request error: POST Target",
 		}
 	}
 	defer resp.Body.Close()
@@ -155,21 +243,27 @@ func (b TargetRequestBody) Create(serverURL string) error {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
 			return LoadApiDataErr{
-				Err: err,
-				Msg: "API error response decode failure",
+				Status: resp.StatusCode,
+				Err:    err,
+				Msg:    "API error response decode failure",
 			}
 		}
 
 		return LoadApiDataErr{
-			Err: responseErr,
-			Msg: fmt.Sprintf("Failed to create target status error: %s", resp.Status),
+			Status: resp.StatusCode,
+			Err:    responseErr,
+			Msg:    responseErr.Error(),
 		}
 	}
 
 	return nil
 }
 
-func (b TargetRequestBody) Update(serverURL string, uuid string) error {
+func (b TargetRequestBody) Update(
+	serverURL string,
+	uuid string,
+	client *authclient.AuthClient,
+) error {
 	data, err := json.Marshal(b)
 	if err != nil {
 		return LoadApiDataErr{
@@ -191,12 +285,18 @@ func (b TargetRequestBody) Update(serverURL string, uuid string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		if errors.As(err, &authclient.ErrInvalidToken{}) {
+			return LoadApiDataErr{
+				Status: http.StatusUnauthorized,
+				Err:    err,
+				Msg:    err.Error(),
+			}
+		}
 		return LoadApiDataErr{
 			Err: err,
-			Msg: "API request error: PATCH target",
+			Msg: "API request error: PATCH Target",
 		}
 	}
 	defer resp.Body.Close()
@@ -205,14 +305,16 @@ func (b TargetRequestBody) Update(serverURL string, uuid string) error {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
 			return LoadApiDataErr{
-				Err: err,
-				Msg: "API error response decode failure",
+				Status: resp.StatusCode,
+				Err:    err,
+				Msg:    "API error response decode failure",
 			}
 		}
 
 		return LoadApiDataErr{
-			Err: responseErr,
-			Msg: fmt.Sprintf("Failed to update target status error: %s", resp.Status),
+			Status: resp.StatusCode,
+			Err:    responseErr,
+			Msg:    responseErr.Error(),
 		}
 	}
 
