@@ -12,15 +12,15 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 )
 
-type respError []string
+type respError map[string]string
 
 func (r *respError) UnmarshalJSON(data []byte) error {
 	var singleError string
 	if err := json.Unmarshal(data, &singleError); err == nil {
-		*r = []string{singleError}
+		*r = map[string]string{"": singleError}
 		return nil
 	}
-	return json.Unmarshal(data, (*[]string)(r))
+	return json.Unmarshal(data, (*map[string]string)(r))
 }
 
 type ErrorResponse struct {
@@ -32,9 +32,27 @@ func (e ErrorResponse) Error() string {
 		return "empty error"
 	}
 	if len(e.Err) == 1 {
-		return e.Err[0]
+		if v, ok := e.Err[""]; ok {
+			return v
+		}
+		for k, v := range e.Err {
+			return fmt.Sprintf("%s - %s", k, v)
+		}
 	}
-	return strings.Join(e.Err, ", ")
+
+	var buf strings.Builder
+	for k, v := range e.Err {
+		if k == "" {
+			buf.WriteString(fmt.Sprintf("%s, ", v))
+		} else {
+			buf.WriteString(fmt.Sprintf("%s: %s, ", k, v))
+		}
+	}
+	return strings.TrimRight(strings.TrimSpace(buf.String()), ",")
+}
+
+type Message struct {
+	Message string `json:"message"`
 }
 
 type Metadata struct {

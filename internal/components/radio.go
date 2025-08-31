@@ -120,14 +120,24 @@ func (r Radio) listViewUpdate(msg tea.Msg) (Radio, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
-			r.selected--
-			if r.selected < 0 {
-				r.selected = len(r.options) - 1
+			for {
+				r.selected--
+				if r.selected < 0 {
+					r.selected = len(r.options) - 1
+				}
+				if r.options[r.selected] != "" {
+					break
+				}
 			}
 		case "down", "j":
-			r.selected++
-			if r.selected >= len(r.options) {
-				r.selected = 0
+			for {
+				r.selected++
+				if r.selected >= len(r.options) {
+					r.selected = 0
+				}
+				if r.options[r.selected] != "" {
+					break
+				}
 			}
 		case "enter":
 			r.choice = r.options[r.selected]

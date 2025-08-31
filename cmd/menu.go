@@ -30,8 +30,9 @@ type menuPage struct {
 	spinner spinner.Model
 	loading bool
 
-	// msg string
-	error error
+	greeting string
+	msg      string
+	error    error
 }
 
 func newMenuPage(cfg config, width, height int) menuPage {
@@ -39,7 +40,7 @@ func newMenuPage(cfg config, width, height int) menuPage {
 		cfg:        cfg,
 		title:      menuTitle(),
 		authView:   menuView([]string{"Targets", "Activities", "Sessions"}),
-		unauthView: menuView([]string{"Sign in", "Sign up"}),
+		unauthView: menuView([]string{"Sign in", "Sign up", "", "", "Forget password"}),
 		width:      width,
 		height:     height,
 		spinner:    spinner.New(spinner.WithSpinner(spinner.Meter)),
@@ -56,6 +57,7 @@ func (m menuPage) loadLoginUser() tea.Cmd {
 
 		return apiSuccessResponseMsg{
 			msg:      user.Name,
+			source:   m,
 			redirect: m,
 		}
 	}
@@ -84,11 +86,26 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, switchToActivitiesCmd
 			case "Sessions":
 				return m, switchToSessionsCmd
+			case "Sign in":
+				return m, switchToSigninCmd
+			case "Sign up":
+				return m, switchToSignupCmd
+			case "Forget password":
+				return m, switchToResetPasswordCmd
 			}
+		case "up", "down", "k", "j":
+			m.msg = ""
 		}
 	case apiSuccessResponseMsg:
-		m.view = m.authView
-		m.loading = false
+		if isExactType[menuPage](msg.source) {
+			m.greeting = fmt.Sprintf("Welcome, %s", msg.msg)
+			m.view = m.authView
+			m.loading = false
+		} else {
+			m.cfg.logger.Info("menu page receive api success response from other source")
+			m.msg = msg.msg
+			return m, m.loadLoginUser()
+		}
 	case data.LoadApiDataErr:
 		switch msg.Status {
 		case http.StatusUnauthorized, http.StatusForbidden:
@@ -138,6 +155,12 @@ func (m menuPage) View() string {
 		return style.ContainerStyle(m.width, container, 5).Render(container)
 	}
 
+	greetingView := lipgloss.NewStyle().
+		Width(50).
+		Foreground(colors.DocumentText).
+		Bold(true).
+		Render(m.greeting)
+
 	menuTitle := lipgloss.NewStyle().
 		Width(20).
 		Padding(1, 2).
@@ -156,6 +179,10 @@ func (m menuPage) View() string {
 			Render(m.view.View()),
 	)
 
+	msgView := style.MsgStyle.Width(lipgloss.Width(mainView)).
+		AlignHorizontal(lipgloss.Center).
+		Render(m.msg)
+
 	helperView := style.HelperView([]style.HelperContent{
 		{Key: "↑/↓", Action: "navigate"},
 		{Key: "Enter", Action: "select"},
@@ -164,7 +191,9 @@ func (m menuPage) View() string {
 
 	container := lipgloss.JoinVertical(
 		lipgloss.Center,
+		greetingView,
 		mainView,
+		msgView,
 		helperView,
 	)
 

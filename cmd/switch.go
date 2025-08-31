@@ -10,12 +10,15 @@ type (
 		model tea.Model
 	}
 
-	switchToTargetsMsg    struct{}
-	switchToActivitiesMsg struct{}
-	switchToSessionsMsg   struct{}
-	switchToMenuMsg       struct{}
-	switchToHelperListMsg struct{}
-	switchToTargetViewMsg struct {
+	switchToTargetsMsg       struct{}
+	switchToActivitiesMsg    struct{}
+	switchToSessionsMsg      struct{}
+	switchToMenuMsg          struct{}
+	switchToSigninMsg        struct{}
+	switchToSignupMsg        struct{}
+	switchToResetPasswordMsg struct{}
+	switchToHelperListMsg    struct{}
+	switchToTargetViewMsg    struct {
 		uuid string
 	}
 	switchToTargetCreateMsg struct{}
@@ -25,12 +28,15 @@ type (
 )
 
 var (
-	switchToTargetsCmd      = func() tea.Msg { return switchToTargetsMsg{} }
-	switchToActivitiesCmd   = func() tea.Msg { return switchToActivitiesMsg{} }
-	switchToSessionsCmd     = func() tea.Msg { return switchToSessionsMsg{} }
-	switchToMenuCmd         = func() tea.Msg { return switchToMenuMsg{} }
-	switchToHelperListCmd   = func() tea.Msg { return switchToHelperListMsg{} }
-	switchToTargetCreateCmd = func() tea.Msg { return switchToTargetCreateMsg{} }
+	switchToTargetsCmd       = func() tea.Msg { return switchToTargetsMsg{} }
+	switchToActivitiesCmd    = func() tea.Msg { return switchToActivitiesMsg{} }
+	switchToSessionsCmd      = func() tea.Msg { return switchToSessionsMsg{} }
+	switchToMenuCmd          = func() tea.Msg { return switchToMenuMsg{} }
+	switchToSigninCmd        = func() tea.Msg { return switchToSigninMsg{} }
+	switchToSignupCmd        = func() tea.Msg { return switchToSignupMsg{} }
+	switchToResetPasswordCmd = func() tea.Msg { return switchToResetPasswordMsg{} }
+	switchToTargetCreateCmd  = func() tea.Msg { return switchToTargetCreateMsg{} }
+	switchToHelperListCmd    = func() tea.Msg { return switchToHelperListMsg{} }
 )
 
 func switchToPreviousCmd(model tea.Model) tea.Cmd {

@@ -21,15 +21,17 @@ type (
 
 	apiSuccessResponseMsg struct {
 		msg      string
+		source   tea.Model
 		redirect tea.Model
 	}
 	unexpectedApiResponseMsg error
 )
 
-func apiSuccessResponseCmd(msg string, model tea.Model) tea.Cmd {
+func apiSuccessResponseCmd(msg string, source, model tea.Model) tea.Cmd {
 	return func() tea.Msg {
 		return apiSuccessResponseMsg{
 			msg:      msg,
+			source:   source,
 			redirect: model,
 		}
 	}

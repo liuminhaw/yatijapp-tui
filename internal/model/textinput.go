@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -58,3 +60,16 @@ func (t *TextInputWrapper) Error() string {
 	return t.model.Err.Error()
 }
 
+func (t *TextInputWrapper) Clear() {
+	t.model.SetValue("")
+	t.model.Err = nil
+}
+
+func ValidateTextInputMatch(target *TextInputWrapper, msg string) textinput.ValidateFunc {
+	return func(input string) error {
+		if input != target.Value() {
+			return errors.New(msg)
+		}
+		return nil
+	}
+}

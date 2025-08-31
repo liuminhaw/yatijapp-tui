@@ -3,8 +3,11 @@ package validator
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 func MultipleValidators(validators ...func(string) error) func(string) error {
@@ -87,6 +90,44 @@ func ValidateMaxLength(length int) func(string) error {
 		if utf8.RuneCountInString(input) > length {
 			return fmt.Errorf("exceeds max length: %d", length)
 		}
+		return nil
+	}
+}
+
+func ValidateMinLength(length int) func(string) error {
+	return func(input string) error {
+		if utf8.RuneCountInString(input) < length {
+			return fmt.Errorf("too short")
+		}
+		return nil
+	}
+}
+
+func ValidateEmail() func(string) error {
+	emailRX := regexp.MustCompile(
+		"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+	)
+
+	return func(input string) error {
+		if !emailRX.MatchString(input) {
+			return errors.New("invalid email format")
+		}
+		return nil
+	}
+}
+
+func ValidatePasswordLength(min, max int) func(string) error {
+	return func(input string) error {
+		// Normalize password
+		pw := norm.NFKC.String(input)
+
+		if err := ValidateMinLength(min)(pw); err != nil {
+			return err
+		}
+		if err := ValidateMaxLength(max)(pw); err != nil {
+			return err
+		}
+
 		return nil
 	}
 }

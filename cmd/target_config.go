@@ -217,6 +217,17 @@ func (m targetPage) View() string {
 		)
 	}
 
+	var statusPrompt string
+	if status.Focused() {
+		statusPrompt = fmt.Sprintf(
+			"%s %s",
+			style.FormFieldStyle.Prompt("Status", status.Focused()),
+			style.FormFieldStyle.Helper.Render("(Use ←/→ keys to select)"),
+		)
+	} else {
+		statusPrompt = style.FormFieldStyle.Prompt("Status", status.Focused())
+	}
+
 	configContent := lipgloss.JoinVertical(
 		lipgloss.Left,
 		lipgloss.JoinHorizontal(
@@ -253,7 +264,7 @@ func (m targetPage) View() string {
 		lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0).Render(
 			fmt.Sprintf(
 				"%s\n%s\n",
-				style.FormFieldStyle.Prompt("Status", status.Focused()),
+				statusPrompt,
 				style.FormFieldStyle.Content.Render(status.View()),
 			),
 		),
@@ -300,14 +311,7 @@ func (m targetPage) View() string {
 }
 
 func (m targetPage) validationError() error {
-	for _, field := range m.fields {
-		field.Validate()
-		if err := field.Error(); err != "" {
-			return errors.New("Input validation failed")
-		}
-	}
-
-	return nil
+	return fieldsValidation(m.fields, "input validation failed")
 }
 
 func (m targetPage) create() tea.Cmd {
@@ -340,7 +344,7 @@ func (m targetPage) create() tea.Cmd {
 		return func() tea.Msg { return apiErrorResponseCmd(err) }
 	}
 
-	return apiSuccessResponseCmd("Target created successfully", m.prev)
+	return apiSuccessResponseCmd("Target created successfully", m, m.prev)
 }
 
 func (m targetPage) update() tea.Cmd {
@@ -373,5 +377,5 @@ func (m targetPage) update() tea.Cmd {
 		return func() tea.Msg { return apiErrorResponseCmd(err) }
 	}
 
-	return apiSuccessResponseCmd("Target updated successfully", m.prev)
+	return apiSuccessResponseCmd("Target updated successfully", m, m.prev)
 }

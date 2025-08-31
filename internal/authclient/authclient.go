@@ -47,7 +47,7 @@ func RefreshToken(serverURL string) Refresher {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusCreated {
-			return Token{}, errors.New("failed to refresh token: " + resp.Status)
+			return Token{}, ErrInvalidToken{Msg: "failed to refresh token: " + resp.Status}
 		}
 		var token refreshResponse
 		if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {

@@ -107,6 +107,12 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchToMenuMsg:
 		m.active = newMenuPage(m.cfg, m.width, m.height)
 		return m, m.active.Init()
+	case switchToSigninMsg:
+		m.active = newSigninPage(m.cfg, style.ViewSize{Width: m.width, Height: m.height})
+	case switchToSignupMsg:
+		m.active = newSignupPage(m.cfg, cmdCreate, style.ViewSize{Width: m.width, Height: m.height}, m.active)
+	case switchToResetPasswordMsg:
+		m.active = newResetPasswordPage(m.cfg, cmdCreate, style.ViewSize{Width: m.width, Height: m.height}, m.active)
 	case switchToTargetsMsg:
 		m.active = newTargetListPage(m.cfg, m.width, m.height)
 		return m, m.active.Init()

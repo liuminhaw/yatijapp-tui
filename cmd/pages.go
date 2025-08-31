@@ -44,3 +44,8 @@ func internalErrorCmd(msg string, err error) tea.Cmd {
 		}
 	}
 }
+
+func isExactType[T any](v any) bool {
+	_, ok := v.(T)
+	return ok
+}
