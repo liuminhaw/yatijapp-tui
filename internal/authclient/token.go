@@ -8,6 +8,7 @@ import (
 type Token struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	SessionUUID  string `json:"session_id"`
 }
 
 func TokenRead(path string) (Token, error) {
@@ -36,4 +37,12 @@ func TokenWrite(t Token, path string) error {
 	}
 
 	return nil
+}
+
+func TokenDelete(path string) error {
+	err := os.Remove(path)
+	if err == nil || os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }

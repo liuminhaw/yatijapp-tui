@@ -56,6 +56,7 @@ func RefreshToken(serverURL string) Refresher {
 		return Token{
 			AccessToken:  token.AuthToken.AccessToken,
 			RefreshToken: token.AuthToken.RefreshToken,
+			SessionUUID:  token.AuthToken.SessionUUID,
 		}, nil
 	}
 }
@@ -83,6 +84,13 @@ func (c *AuthClient) GetToken() (Token, error) {
 		return Token{}, ErrInvalidToken{Msg: "token is missing or invalid"}
 	}
 	return token, nil
+}
+
+func (c *AuthClient) ClearToken() error {
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
+
+	return TokenDelete(c.TokenPath)
 }
 
 func (c *AuthClient) Do(req *http.Request) (*http.Response, error) {

@@ -18,11 +18,12 @@ import (
 type menuPage struct {
 	cfg config
 
-	title string
-	view  components.Radio
+	title    string
+	view     []components.Radio
+	viewPage int
 
-	authView   components.Radio
-	unauthView components.Radio
+	authView   []components.Radio
+	unauthView []components.Radio
 
 	width  int
 	height int
@@ -37,14 +38,19 @@ type menuPage struct {
 
 func newMenuPage(cfg config, width, height int) menuPage {
 	return menuPage{
-		cfg:        cfg,
-		title:      menuTitle(),
-		authView:   menuView([]string{"Targets", "Activities", "Sessions"}),
-		unauthView: menuView([]string{"Sign in", "Sign up", "", "", "Forget password"}),
-		width:      width,
-		height:     height,
-		spinner:    spinner.New(spinner.WithSpinner(spinner.Meter)),
-		loading:    true,
+		cfg:   cfg,
+		title: menuTitle(),
+		authView: menuView([][]string{
+			{"Targets", "Activities", "Sessions", "", "Sign out"},
+			// {"Profile", "", "Sign out"},
+		}),
+		unauthView: menuView([][]string{
+			{"Sign in", "Sign up", "", "", "Forget password"},
+		}),
+		width:   width,
+		height:  height,
+		spinner: spinner.New(spinner.WithSpinner(spinner.Meter)),
+		loading: true,
 	}
 }
 
@@ -79,19 +85,29 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "enter":
-			switch m.view.Selected() {
+			switch m.view[m.viewPage].Selected() {
 			case "Targets":
 				return m, switchToTargetsCmd
 			case "Activities":
 				return m, switchToActivitiesCmd
 			case "Sessions":
 				return m, switchToSessionsCmd
+			case "Sign out":
+				return m, m.signout()
 			case "Sign in":
 				return m, switchToSigninCmd
 			case "Sign up":
 				return m, switchToSignupCmd
 			case "Forget password":
 				return m, switchToResetPasswordCmd
+			}
+		case ">":
+			if len(m.view) > 1 {
+				m.viewPage = 1
+			}
+		case "<":
+			if len(m.view) > 1 {
+				m.viewPage = 0
 			}
 		case "up", "down", "k", "j":
 			m.msg = ""
@@ -100,6 +116,7 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if isExactType[menuPage](msg.source) {
 			m.greeting = fmt.Sprintf("Welcome, %s", msg.msg)
 			m.view = m.authView
+			m.viewPage = 0
 			m.loading = false
 		} else {
 			m.cfg.logger.Info("menu page receive api success response from other source")
@@ -109,7 +126,9 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case data.LoadApiDataErr:
 		switch msg.Status {
 		case http.StatusUnauthorized, http.StatusForbidden:
+			m.greeting = ""
 			m.view = m.unauthView
+			m.viewPage = 0
 		default:
 			m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "load login user"))
 			m.error = errors.New(msg.Msg)
@@ -123,7 +142,7 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	m.view, cmd = m.view.Update(msg)
+	m.view[m.viewPage], cmd = m.view[m.viewPage].Update(msg)
 
 	return m, cmd
 }
@@ -176,18 +195,24 @@ func (m menuPage) View() string {
 			AlignVertical(lipgloss.Center).
 			Height(lipgloss.Height(menuTitle)).
 			Margin(0, 1).
-			Render(m.view.View()),
+			Render(m.view[m.viewPage].View()),
 	)
 
 	msgView := style.MsgStyle.Width(lipgloss.Width(mainView)).
 		AlignHorizontal(lipgloss.Center).
 		Render(m.msg)
 
-	helperView := style.HelperView([]style.HelperContent{
+	helper := []style.HelperContent{
 		{Key: "↑/↓", Action: "navigate"},
 		{Key: "Enter", Action: "select"},
 		{Key: "q", Action: "quit"},
-	}, lipgloss.Width(mainView), style.NormalView)
+	}
+	if len(m.view) > 1 && m.viewPage == 0 {
+		helper = append(helper, style.HelperContent{Key: ">", Action: "more"})
+	} else if len(m.view) > 1 && m.viewPage == 1 {
+		helper = append(helper, style.HelperContent{Key: "<", Action: "back"})
+	}
+	helperView := style.HelperView(helper, lipgloss.Width(mainView), style.NormalView)
 
 	container := lipgloss.JoinVertical(
 		lipgloss.Center,
@@ -207,6 +232,15 @@ func (m menuPage) View() string {
 		Render(container)
 }
 
+func (m menuPage) signout() tea.Cmd {
+	_, err := data.Signout(m.cfg.serverURL, m.cfg.authClient)
+	if err != nil {
+		return func() tea.Msg { return apiErrorResponseCmd(err) }
+	}
+
+	return apiSuccessResponseCmd("sign out successfully", Water{}, m)
+}
+
 func menuTitle() string {
 	highlight := lipgloss.NewStyle().
 		Foreground(colors.DocumentText).
@@ -222,9 +256,13 @@ func menuTitle() string {
 	)
 }
 
-func menuView(options []string) components.Radio {
-	radio := components.NewRadio(options, components.RadioListView)
-	radio.Focus()
+func menuView(options [][]string) []components.Radio {
+	var radios []components.Radio
+	for _, opts := range options {
+		radio := components.NewRadio(opts, components.RadioListView)
+		radio.Focus()
+		radios = append(radios, radio)
+	}
 
-	return radio
+	return radios
 }
