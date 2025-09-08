@@ -113,10 +113,19 @@ func (m signupPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// m.cfg.logger.Info("Account activated", slog.String("email", email.Value()), slog.String("password", password.Value()))
 		}
 		return m, nil
-	case data.LoadApiDataErr:
+	case data.UnauthorizedApiDataErr:
+		m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "user signin"))
+		m.err = errors.New(msg.Msg)
+	case data.UnmatchedApiRespDataErr:
+		m.cfg.logger.Info("Unmatched API response")
 		m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "user signup"))
 		m.err = errors.New(msg.Msg)
+	case data.UnexpectedApiDataErr:
+		m.cfg.logger.Info("Unexpected API response")
+		m.cfg.logger.Error(msg.Error(), slog.String("action", "user signup"))
+		m.err = errors.New(msg.Msg)
 	case error:
+		m.cfg.logger.Error(msg.Error(), slog.String("action", "user signup"))
 		m.err = msg
 	}
 
@@ -253,77 +262,85 @@ func (m signupPage) validationError() error {
 }
 
 func (m signupPage) signup() tea.Cmd {
-	name := m.fields[0].Value()
-	email := m.fields[1].Value()
-	password := m.fields[2].Value()
+	return func() tea.Msg {
+		name := m.fields[0].Value()
+		email := m.fields[1].Value()
+		password := m.fields[2].Value()
 
-	if err := m.validationError(); err != nil {
-		return validationErrorCmd(err)
-	}
+		if err := m.validationError(); err != nil {
+			return validationErrorCmd(err)
+		}
 
-	request := data.UserRequest{
-		Name:     name,
-		Email:    email,
-		Password: password,
-	}
-	err := request.Register(m.cfg.serverURL)
-	if err != nil {
-		return func() tea.Msg { return apiErrorResponseCmd(err) }
-	}
+		request := data.UserRequest{
+			Name:     name,
+			Email:    email,
+			Password: password,
+		}
+		err := request.Register(m.cfg.serverURL)
+		if err != nil {
+			return err
+		}
 
-	return apiSuccessResponseCmd("", m, m)
+		return apiSuccessResponseMsg{
+			msg:      "",
+			source:   m,
+			redirect: m,
+		}
+	}
 }
 
 func (m signupPage) activate() tea.Cmd {
-	token := m.fields[0].Value()
+	return func() tea.Msg {
+		token := m.fields[0].Value()
 
-	if err := m.validationError(); err != nil {
-		return validationErrorCmd(err)
-	}
-
-	request := data.UserTokenRequest{Token: token}
-	err := request.ActivateUser(m.cfg.serverURL)
-	if err != nil {
-		return func() tea.Msg { return apiErrorResponseCmd(err) }
-	}
-
-	if len(m.fields) != 3 {
-		return apiSuccessResponseCmd(
-			"Account activated, you can now sign in.",
-			m,
-			newMenuPage(m.cfg, m.width, m.height),
-		)
-	}
-
-	email := m.fields[1].Value()
-	password := m.fields[2].Value()
-
-	signinReq := data.UserRequest{
-		Email:    email,
-		Password: password,
-	}
-	if err := signinReq.Signin(m.cfg.serverURL, m.cfg.authClient.TokenPath); err != nil {
-		var le data.LoadApiDataErr
-		if errors.As(err, &le) {
-			m.cfg.logger.Error(
-				le.Error(),
-				slog.Int("status", le.Status),
-				slog.String("action", "activation auto login"),
-			)
-		} else {
-			m.cfg.logger.Error(err.Error(), slog.String("action", "activation auto login"))
+		if err := m.validationError(); err != nil {
+			return validationErrorCmd(err)
 		}
 
-		return apiSuccessResponseCmd(
-			"Account activated, you can now sign in.",
-			m,
-			newMenuPage(m.cfg, m.width, m.height),
-		)
-	}
+		request := data.UserTokenRequest{Token: token}
+		err := request.ActivateUser(m.cfg.serverURL)
+		if err != nil {
+			return err
+		}
 
-	return apiSuccessResponseCmd(
-		"Account activated",
-		m,
-		newMenuPage(m.cfg, m.width, m.height),
-	)
+		if len(m.fields) != 3 {
+			return apiSuccessResponseMsg{
+				msg:      "Account activated, you can now sign in.",
+				source:   m,
+				redirect: newMenuPage(m.cfg, m.width, m.height),
+			}
+		}
+
+		email := m.fields[1].Value()
+		password := m.fields[2].Value()
+
+		signinReq := data.UserRequest{
+			Email:    email,
+			Password: password,
+		}
+		if err := signinReq.Signin(m.cfg.serverURL, m.cfg.authClient.TokenPath); err != nil {
+			var le data.UnauthorizedApiDataErr
+			if errors.As(err, &le) {
+				m.cfg.logger.Error(
+					le.Error(),
+					slog.Int("status", le.Status),
+					slog.String("action", "activation auto login"),
+				)
+			} else {
+				m.cfg.logger.Error(err.Error(), slog.String("action", "activation auto login"))
+			}
+
+			return apiSuccessResponseMsg{
+				msg:      "Account activated, you can now sign in.",
+				source:   m,
+				redirect: newMenuPage(m.cfg, m.width, m.height),
+			}
+		}
+
+		return apiSuccessResponseMsg{
+			msg:      "Account activated",
+			source:   m,
+			redirect: newMenuPage(m.cfg, m.width, m.height),
+		}
+	}
 }

@@ -14,7 +14,7 @@ type ResetPasswordTokenRequest struct {
 func (r ResetPasswordTokenRequest) Do(serverUrl string) (Message, error) {
 	data, err := json.Marshal(r)
 	if err != nil {
-		return Message{}, LoadApiDataErr{
+		return Message{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create request body JSON",
 		}
@@ -26,7 +26,7 @@ func (r ResetPasswordTokenRequest) Do(serverUrl string) (Message, error) {
 		bytes.NewReader(data),
 	)
 	if err != nil {
-		return Message{}, LoadApiDataErr{
+		return Message{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API request error: POST ResetPasswordToken",
 		}
@@ -36,14 +36,13 @@ func (r ResetPasswordTokenRequest) Do(serverUrl string) (Message, error) {
 	if resp.StatusCode != http.StatusAccepted {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return Message{}, LoadApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return Message{}, UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
-		return Message{}, LoadApiDataErr{
+		return Message{}, UnmatchedApiRespDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -52,10 +51,9 @@ func (r ResetPasswordTokenRequest) Do(serverUrl string) (Message, error) {
 
 	var responseData Message
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return Message{}, LoadApiDataErr{
-			Status: resp.StatusCode,
-			Err:    err,
-			Msg:    "API response decode error",
+		return Message{}, UnexpectedApiDataErr{
+			Err: err,
+			Msg: "API response decode error",
 		}
 	}
 

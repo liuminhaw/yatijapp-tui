@@ -75,7 +75,7 @@ func (m signinPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		}
-	case data.LoadApiDataErr:
+	case data.UnauthorizedApiDataErr:
 		m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "user signin"))
 		m.err = errors.New(msg.Msg)
 		password := m.fields[1]
@@ -156,24 +156,26 @@ func (m signinPage) validationError() error {
 }
 
 func (m signinPage) signin() tea.Cmd {
-	email := m.fields[0].Value()
-	password := m.fields[1].Value()
+	return func() tea.Msg {
+		email := m.fields[0].Value()
+		password := m.fields[1].Value()
 
-	if err := m.validationError(); err != nil {
-		return validationErrorCmd(err)
-	}
+		if err := m.validationError(); err != nil {
+			return validationErrorCmd(err)
+		}
 
-	request := data.UserRequest{
-		Email:    email,
-		Password: password,
-	}
-	if err := request.Signin(m.cfg.serverURL, m.cfg.authClient.TokenPath); err != nil {
-		return func() tea.Msg { return apiErrorResponseCmd(err) }
-	}
+		request := data.UserRequest{
+			Email:    email,
+			Password: password,
+		}
+		if err := request.Signin(m.cfg.serverURL, m.cfg.authClient.TokenPath); err != nil {
+			return err
+		}
 
-	return apiSuccessResponseCmd(
-		"Signed in successfully",
-		m,
-		newMenuPage(m.cfg, m.width, m.height),
-	)
+		return apiSuccessResponseMsg{
+			msg:      "Signed in successfully",
+			source:   m,
+			redirect: newMenuPage(m.cfg, m.width, m.height),
+		}
+	}
 }

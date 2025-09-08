@@ -11,10 +11,19 @@ import (
 )
 
 type ErrInvalidToken struct {
-	Msg string
+	Status int
+	Msg    string
 }
 
 func (e ErrInvalidToken) Error() string {
+	return e.Msg
+}
+
+type ErrMissingToken struct {
+	Msg string
+}
+
+func (e ErrMissingToken) Error() string {
 	return e.Msg
 }
 
@@ -47,7 +56,10 @@ func RefreshToken(serverURL string) Refresher {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusCreated {
-			return Token{}, ErrInvalidToken{Msg: "failed to refresh token: " + resp.Status}
+			return Token{}, ErrInvalidToken{
+				Status: resp.StatusCode,
+				Msg:    "failed to refresh token: " + resp.Status,
+			}
 		}
 		var token refreshResponse
 		if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
@@ -81,7 +93,7 @@ func (c *AuthClient) GetToken() (Token, error) {
 
 	token, err := TokenRead(c.TokenPath)
 	if err != nil {
-		return Token{}, ErrInvalidToken{Msg: "token is missing or invalid"}
+		return Token{}, ErrMissingToken{Msg: "token is missing"}
 	}
 	return token, nil
 }
@@ -140,14 +152,14 @@ func (c *AuthClient) refresh(ctx context.Context) error {
 		return err
 	}
 	if token.RefreshToken == "" {
-		return ErrInvalidToken{Msg: "no refresh token available"}
+		return ErrMissingToken{Msg: "token is missing"}
 	}
 	newToken, err := c.Refresh(ctx, token.RefreshToken)
 	if err != nil {
 		return err
 	}
 	if newToken.AccessToken == "" || newToken.RefreshToken == "" {
-		return ErrInvalidToken{Msg: "invalid token received from refresher"}
+		return ErrMissingToken{Msg: "refreshed token is missing"}
 	}
 
 	if err := c.SetToken(newToken); err != nil {

@@ -131,9 +131,6 @@ func (m targetPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-	case data.LoadApiDataErr:
-		m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "save target"))
-		m.err = errors.New(msg.Msg)
 	case tea.KeyMsg:
 		switch m.mode {
 		case style.NormalView:
@@ -176,7 +173,12 @@ func (m targetPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-	// unexpectedApiResponseMsg, validationErrorMsg
+	case data.UnauthorizedApiDataErr:
+		m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "save target"))
+		m.err = errors.New(msg.Msg)
+	case data.UnexpectedApiDataErr:
+		m.cfg.logger.Error(msg.Error(), slog.String("action", "save target"))
+		m.err = errors.New(msg.Msg)
 	case error:
 		m.err = msg
 	}
@@ -315,67 +317,79 @@ func (m targetPage) validationError() error {
 }
 
 func (m targetPage) create() tea.Cmd {
-	title := m.fields[0].Value()
-	due := m.fields[1].Value()
-	description := m.fields[2].Value()
-	status := m.fields[3].Value()
-	note := m.fields[4].Value()
+	return func() tea.Msg {
+		title := m.fields[0].Value()
+		due := m.fields[1].Value()
+		description := m.fields[2].Value()
+		status := m.fields[3].Value()
+		note := m.fields[4].Value()
 
-	if err := m.validationError(); err != nil {
-		return validationErrorCmd(err)
-	}
-
-	request := data.TargetRequestBody{
-		Title:       title,
-		Description: description,
-		Status:      status,
-		Notes:       note,
-	}
-	if due != "" {
-		dueDate, err := time.ParseInLocation("2006-01-02", due, time.Local)
-		if err != nil {
-			return validationErrorCmd(errors.New("invalid due date format"))
+		if err := m.validationError(); err != nil {
+			return validationErrorCmd(err)
 		}
-		dueDateTyped := data.Date(dueDate)
-		request.DueDate = &dueDateTyped
-	}
 
-	if err := request.Create(m.cfg.serverURL, m.cfg.authClient); err != nil {
-		return func() tea.Msg { return apiErrorResponseCmd(err) }
-	}
+		request := data.TargetRequestBody{
+			Title:       title,
+			Description: description,
+			Status:      status,
+			Notes:       note,
+		}
+		if due != "" {
+			dueDate, err := time.ParseInLocation("2006-01-02", due, time.Local)
+			if err != nil {
+				return validationErrorCmd(errors.New("invalid due date format"))
+			}
+			dueDateTyped := data.Date(dueDate)
+			request.DueDate = &dueDateTyped
+		}
 
-	return apiSuccessResponseCmd("Target created successfully", m, m.prev)
+		if err := request.Create(m.cfg.serverURL, m.cfg.authClient); err != nil {
+			return err
+		}
+
+		return apiSuccessResponseMsg{
+			msg:      "Target created successfully",
+			source:   m,
+			redirect: m.prev,
+		}
+	}
 }
 
 func (m targetPage) update() tea.Cmd {
-	title := m.fields[0].Value()
-	due := m.fields[1].Value()
-	description := m.fields[2].Value()
-	status := m.fields[3].Value()
-	note := m.fields[4].Value()
+	return func() tea.Msg {
+		title := m.fields[0].Value()
+		due := m.fields[1].Value()
+		description := m.fields[2].Value()
+		status := m.fields[3].Value()
+		note := m.fields[4].Value()
 
-	if err := m.validationError(); err != nil {
-		return validationErrorCmd(err)
-	}
-
-	request := data.TargetRequestBody{
-		Title:       title,
-		Description: description,
-		Status:      status,
-		Notes:       note,
-	}
-	if due != "" {
-		dueDate, err := time.ParseInLocation("2006-01-02", due, time.Local)
-		if err != nil {
-			return validationErrorCmd(errors.New("invalid due date format"))
+		if err := m.validationError(); err != nil {
+			return validationErrorCmd(err)
 		}
-		dueDateTyped := data.Date(dueDate)
-		request.DueDate = &dueDateTyped
-	}
 
-	if err := request.Update(m.cfg.serverURL, m.uuid, m.cfg.authClient); err != nil {
-		return func() tea.Msg { return apiErrorResponseCmd(err) }
-	}
+		request := data.TargetRequestBody{
+			Title:       title,
+			Description: description,
+			Status:      status,
+			Notes:       note,
+		}
+		if due != "" {
+			dueDate, err := time.ParseInLocation("2006-01-02", due, time.Local)
+			if err != nil {
+				return validationErrorCmd(errors.New("invalid due date format"))
+			}
+			dueDateTyped := data.Date(dueDate)
+			request.DueDate = &dueDateTyped
+		}
 
-	return apiSuccessResponseCmd("Target updated successfully", m, m.prev)
+		if err := request.Update(m.cfg.serverURL, m.uuid, m.cfg.authClient); err != nil {
+			return err
+		}
+
+		return apiSuccessResponseMsg{
+			msg:      "Target updated successfully",
+			source:   m,
+			redirect: m.prev,
+		}
+	}
 }

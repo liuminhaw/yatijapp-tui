@@ -3,7 +3,6 @@ package data
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -23,7 +22,7 @@ func GetCurrentUser(serverURL string, client *authclient.AuthClient) (User, erro
 		nil,
 	)
 	if err != nil {
-		return User{}, LoadApiDataErr{
+		return User{}, UnauthorizedApiDataErr{
 			Err: err,
 			Msg: "Failed to create GET request for Current User",
 		}
@@ -31,31 +30,21 @@ func GetCurrentUser(serverURL string, client *authclient.AuthClient) (User, erro
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if errors.As(err, &authclient.ErrInvalidToken{}) {
-			return User{}, LoadApiDataErr{
-				Status: http.StatusUnauthorized,
-				Err:    err,
-				Msg:    err.Error(),
-			}
-		}
-		return User{}, LoadApiDataErr{
-			Err: err,
-			Msg: "API request error: GET Current User",
-		}
+		return User{}, respErrorCheck(err, "API request error: GET Current User")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return User{}, LoadApiDataErr{
+			return User{}, UnauthorizedApiDataErr{
 				Status: resp.StatusCode,
 				Err:    err,
 				Msg:    "API error response decode failure",
 			}
 		}
 
-		return User{}, LoadApiDataErr{
+		return User{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -64,7 +53,7 @@ func GetCurrentUser(serverURL string, client *authclient.AuthClient) (User, erro
 
 	var responseData GetUserResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return User{}, LoadApiDataErr{
+		return User{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    err,
 			Msg:    "API response decode error",
@@ -83,7 +72,7 @@ type UserRequest struct {
 func (r UserRequest) Signin(serverURL string, tokenPath string) error {
 	data, err := json.Marshal(r)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create request body JSON",
 		}
@@ -95,7 +84,7 @@ func (r UserRequest) Signin(serverURL string, tokenPath string) error {
 		bytes.NewReader(data),
 	)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API request error: POST Signin",
 		}
@@ -105,17 +94,16 @@ func (r UserRequest) Signin(serverURL string, tokenPath string) error {
 	if resp.StatusCode != http.StatusCreated {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return LoadApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
-		return LoadApiDataErr{
+		return UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
-			Msg:    responseErr.Error(),
+			Msg:    "Incorrect email or password",
 		}
 	}
 
@@ -123,14 +111,13 @@ func (r UserRequest) Signin(serverURL string, tokenPath string) error {
 		AuthToken authclient.Token `json:"authentication_token"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return LoadApiDataErr{
-			Status: resp.StatusCode,
-			Err:    err,
-			Msg:    "API response decode error",
+		return UnexpectedApiDataErr{
+			Err: err,
+			Msg: "API response decode error",
 		}
 	}
 	if err := authclient.TokenWrite(responseData.AuthToken, tokenPath); err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to generate user token",
 		}
@@ -142,7 +129,7 @@ func (r UserRequest) Signin(serverURL string, tokenPath string) error {
 func (r UserRequest) Register(serverURL string) error {
 	data, err := json.Marshal(r)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create request body JSON",
 		}
@@ -154,7 +141,7 @@ func (r UserRequest) Register(serverURL string) error {
 		bytes.NewReader(data),
 	)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API request error: POST Register",
 		}
@@ -164,14 +151,13 @@ func (r UserRequest) Register(serverURL string) error {
 	if resp.StatusCode != http.StatusAccepted {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return LoadApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
-		return LoadApiDataErr{
+		return UnmatchedApiRespDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -189,7 +175,7 @@ type UserTokenRequest struct {
 func (r UserTokenRequest) ResetPassword(serverURL string) (Message, error) {
 	data, err := json.Marshal(r)
 	if err != nil {
-		return Message{}, LoadApiDataErr{
+		return Message{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create request body JSON",
 		}
@@ -201,7 +187,7 @@ func (r UserTokenRequest) ResetPassword(serverURL string) (Message, error) {
 		bytes.NewReader(data),
 	)
 	if err != nil {
-		return Message{}, LoadApiDataErr{
+		return Message{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create PUT request for Reset Password",
 		}
@@ -209,7 +195,7 @@ func (r UserTokenRequest) ResetPassword(serverURL string) (Message, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return Message{}, LoadApiDataErr{
+		return Message{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API request error: PUT ResetPassword",
 		}
@@ -219,14 +205,13 @@ func (r UserTokenRequest) ResetPassword(serverURL string) (Message, error) {
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return Message{}, LoadApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return Message{}, UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
-		return Message{}, LoadApiDataErr{
+		return Message{}, UnmatchedApiRespDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -235,10 +220,9 @@ func (r UserTokenRequest) ResetPassword(serverURL string) (Message, error) {
 
 	var responseData Message
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return Message{}, LoadApiDataErr{
-			Status: resp.StatusCode,
-			Err:    err,
-			Msg:    "API response decode error",
+		return Message{}, UnexpectedApiDataErr{
+			Err: err,
+			Msg: "API response decode error",
 		}
 	}
 
@@ -248,7 +232,7 @@ func (r UserTokenRequest) ResetPassword(serverURL string) (Message, error) {
 func (r UserTokenRequest) ActivateUser(serverURL string) error {
 	data, err := json.Marshal(r)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create request body JSON",
 		}
@@ -260,7 +244,7 @@ func (r UserTokenRequest) ActivateUser(serverURL string) error {
 		bytes.NewReader(data),
 	)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create PUT request for Activating User",
 		}
@@ -268,7 +252,7 @@ func (r UserTokenRequest) ActivateUser(serverURL string) error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API request error: PUT ActivateUser",
 		}
@@ -278,14 +262,13 @@ func (r UserTokenRequest) ActivateUser(serverURL string) error {
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return LoadApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
-		return LoadApiDataErr{
+		return UnmatchedApiRespDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),

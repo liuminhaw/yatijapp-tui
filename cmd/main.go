@@ -65,6 +65,7 @@ func main() {
 		TokenPath: filepath.Join(homeDir, ".yatijapp", "creds", "token.json"),
 	}
 
+	// p := tea.NewProgram(newMainModel(cfg), tea.WithAltScreen(), tea.WithoutCatchPanics())
 	p := tea.NewProgram(newMainModel(cfg), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		panic(err)

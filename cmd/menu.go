@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -37,7 +36,7 @@ type menuPage struct {
 }
 
 func newMenuPage(cfg config, width, height int) menuPage {
-	return menuPage{
+	page := menuPage{
 		cfg:   cfg,
 		title: menuTitle(),
 		authView: menuView([][]string{
@@ -52,13 +51,16 @@ func newMenuPage(cfg config, width, height int) menuPage {
 		spinner: spinner.New(spinner.WithSpinner(spinner.Meter)),
 		loading: true,
 	}
+	page.view = page.unauthView
+
+	return page
 }
 
 func (m menuPage) loadLoginUser() tea.Cmd {
 	return func() tea.Msg {
 		user, err := data.GetCurrentUser(m.cfg.serverURL, m.cfg.authClient)
 		if err != nil {
-			return apiErrorResponseCmd(err)
+			return err
 		}
 
 		return apiSuccessResponseMsg{
@@ -123,18 +125,16 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.msg = msg.msg
 			return m, m.loadLoginUser()
 		}
-	case data.LoadApiDataErr:
-		switch msg.Status {
-		case http.StatusUnauthorized, http.StatusForbidden:
-			m.greeting = ""
-			m.view = m.unauthView
-			m.viewPage = 0
-		default:
-			m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "load login user"))
-			m.error = errors.New(msg.Msg)
-		}
+	case data.UnauthorizedApiDataErr:
+		m.greeting = ""
+		m.view = m.unauthView
+		m.viewPage = 0
 		m.loading = false
-	case unexpectedApiResponseMsg:
+	case data.UnexpectedApiDataErr:
+		m.cfg.logger.Error(msg.Error(), slog.String("action", "load login user"))
+		m.error = errors.New(msg.Msg)
+		m.loading = false
+	case error:
 		m.error = msg
 		m.loading = false
 	case spinner.TickMsg:
@@ -233,12 +233,18 @@ func (m menuPage) View() string {
 }
 
 func (m menuPage) signout() tea.Cmd {
-	_, err := data.Signout(m.cfg.serverURL, m.cfg.authClient)
-	if err != nil {
-		return func() tea.Msg { return apiErrorResponseCmd(err) }
-	}
+	return func() tea.Msg {
+		_, err := data.Signout(m.cfg.serverURL, m.cfg.authClient)
+		if err != nil {
+			return err
+		}
 
-	return apiSuccessResponseCmd("sign out successfully", Water{}, m)
+		return apiSuccessResponseMsg{
+			msg:      "sign out successfully",
+			source:   Water{},
+			redirect: m,
+		}
+	}
 }
 
 func menuTitle() string {

@@ -75,7 +75,7 @@ func (t targetViewPage) deleteTarget(uuid, msg string) tea.Cmd {
 	return func() tea.Msg {
 		t.clearMsg()
 		if err := data.DeleteTarget(serverURL, uuid, t.cfg.authClient); err != nil {
-			return apiErrorResponseCmd(err)
+			return err
 		}
 
 		return targetDeletedMsg(msg)
@@ -140,11 +140,15 @@ func (t targetViewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case internalErrorMsg:
 		t.error = errors.New(msg.msg)
 		t.loading = false
-	case data.LoadApiDataErr:
+	case data.UnauthorizedApiDataErr:
 		t.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "load target"))
+		t.loading = false
+		return t, switchToMenuCmd
+	case data.UnexpectedApiDataErr:
+		t.cfg.logger.Error(msg.Error(), slog.String("action", "load target"))
 		t.error = errors.New(msg.Msg)
 		t.loading = false
-	case unexpectedApiResponseMsg:
+	case error:
 		t.error = msg
 		t.loading = false
 	case spinner.TickMsg:

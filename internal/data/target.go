@@ -3,7 +3,6 @@ package data
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -25,7 +24,7 @@ func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, err
 		nil,
 	)
 	if err != nil {
-		return []Target{}, LoadApiDataErr{
+		return []Target{}, UnauthorizedApiDataErr{
 			Err: err,
 			Msg: "Failed to create GET request for Targets",
 		}
@@ -33,31 +32,21 @@ func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, err
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if errors.As(err, &authclient.ErrInvalidToken{}) {
-			return []Target{}, LoadApiDataErr{
-				Status: http.StatusUnauthorized,
-				Err:    err,
-				Msg:    err.Error(),
-			}
-		}
-		return []Target{}, LoadApiDataErr{
-			Err: err,
-			Msg: "API request error: GET Current User",
-		}
+		return []Target{}, respErrorCheck(err, "API request error: GET Targets")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return []Target{}, LoadApiDataErr{
+			return []Target{}, UnauthorizedApiDataErr{
 				Status: resp.StatusCode,
 				Err:    err,
 				Msg:    "API error response decode failure",
 			}
 		}
 
-		return []Target{}, LoadApiDataErr{
+		return []Target{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -66,7 +55,7 @@ func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, err
 
 	var responseData ListTargetsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return []Target{}, LoadApiDataErr{
+		return []Target{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    err,
 			Msg:    "API response decode error",
@@ -90,7 +79,7 @@ func GetTarget(serverURL, uuid string, client *authclient.AuthClient) (Target, e
 		nil,
 	)
 	if err != nil {
-		return Target{}, LoadApiDataErr{
+		return Target{}, UnauthorizedApiDataErr{
 			Err: err,
 			Msg: "Failed to create GET request for Target",
 		}
@@ -98,31 +87,21 @@ func GetTarget(serverURL, uuid string, client *authclient.AuthClient) (Target, e
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if errors.As(err, &authclient.ErrInvalidToken{}) {
-			return Target{}, LoadApiDataErr{
-				Status: http.StatusUnauthorized,
-				Err:    err,
-				Msg:    err.Error(),
-			}
-		}
-		return Target{}, LoadApiDataErr{
-			Err: err,
-			Msg: "API request error: GET Target",
-		}
+		return Target{}, respErrorCheck(err, "API request error: GET Target")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return Target{}, LoadApiDataErr{
+			return Target{}, UnauthorizedApiDataErr{
 				Status: resp.StatusCode,
 				Err:    err,
 				Msg:    "API error response decode failure",
 			}
 		}
 
-		return Target{}, LoadApiDataErr{
+		return Target{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -131,7 +110,7 @@ func GetTarget(serverURL, uuid string, client *authclient.AuthClient) (Target, e
 
 	var responseData GetTargetResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return Target{}, LoadApiDataErr{
+		return Target{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    err,
 			Msg:    "API response decode error",
@@ -151,7 +130,7 @@ func DeleteTarget(serverURL, uuid string, client *authclient.AuthClient) error {
 		nil,
 	)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnauthorizedApiDataErr{
 			Err: err,
 			Msg: "Failed to create DELETE request for target",
 		}
@@ -159,31 +138,21 @@ func DeleteTarget(serverURL, uuid string, client *authclient.AuthClient) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if errors.As(err, &authclient.ErrInvalidToken{}) {
-			return LoadApiDataErr{
-				Status: http.StatusUnauthorized,
-				Err:    err,
-				Msg:    err.Error(),
-			}
-		}
-		return LoadApiDataErr{
-			Err: err,
-			Msg: "API request error: DELETE Target",
-		}
+		return respErrorCheck(err, "API request error: DELETE Target")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return LoadApiDataErr{
+			return UnauthorizedApiDataErr{
 				Status: resp.StatusCode,
 				Err:    err,
 				Msg:    "API error response decode failure",
 			}
 		}
 
-		return LoadApiDataErr{
+		return UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -204,7 +173,7 @@ type TargetRequestBody struct {
 func (b TargetRequestBody) Create(serverURL string, client *authclient.AuthClient) error {
 	data, err := json.Marshal(b)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create request body JSON",
 		}
@@ -216,7 +185,7 @@ func (b TargetRequestBody) Create(serverURL string, client *authclient.AuthClien
 		bytes.NewBuffer(data),
 	)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create POST request for target",
 		}
@@ -225,31 +194,20 @@ func (b TargetRequestBody) Create(serverURL string, client *authclient.AuthClien
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if errors.As(err, &authclient.ErrInvalidToken{}) {
-			return LoadApiDataErr{
-				Status: http.StatusUnauthorized,
-				Err:    err,
-				Msg:    err.Error(),
-			}
-		}
-		return LoadApiDataErr{
-			Err: err,
-			Msg: "API request error: POST Target",
-		}
+		return respErrorCheck(err, "API request error: POST Target")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return LoadApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
-		return LoadApiDataErr{
+		return UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -266,7 +224,7 @@ func (b TargetRequestBody) Update(
 ) error {
 	data, err := json.Marshal(b)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create request body JSON",
 		}
@@ -278,7 +236,7 @@ func (b TargetRequestBody) Update(
 		bytes.NewBuffer(data),
 	)
 	if err != nil {
-		return LoadApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create PATCH request for target",
 		}
@@ -287,31 +245,20 @@ func (b TargetRequestBody) Update(
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if errors.As(err, &authclient.ErrInvalidToken{}) {
-			return LoadApiDataErr{
-				Status: http.StatusUnauthorized,
-				Err:    err,
-				Msg:    err.Error(),
-			}
-		}
-		return LoadApiDataErr{
-			Err: err,
-			Msg: "API request error: PATCH Target",
-		}
+		return respErrorCheck(err, "API request error: PATCH Target")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return LoadApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
-		return LoadApiDataErr{
+		return UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),

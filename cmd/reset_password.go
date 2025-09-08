@@ -122,10 +122,14 @@ func (m resetPasswordPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setFields()
 		}
 		return m, nil
-	case data.LoadApiDataErr:
+	case data.UnmatchedApiRespDataErr:
 		m.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "reset password"))
 		m.err = errors.New(msg.Msg)
+	case data.UnexpectedApiDataErr:
+		m.cfg.logger.Error(msg.Error(), slog.String("action", "reset password"))
+		m.err = errors.New(msg.Msg)
 	case error:
+		m.cfg.logger.Error(msg.Error(), slog.String("action", "reset password"))
 		m.err = msg
 	}
 
@@ -247,39 +251,51 @@ func (m resetPasswordPage) validationError() error {
 }
 
 func (m resetPasswordPage) sendResetToken() tea.Cmd {
-	email := m.fields[0].Value()
+	return func() tea.Msg {
+		email := m.fields[0].Value()
 
-	if err := m.validationError(); err != nil {
-		return validationErrorCmd(err)
-	}
+		if err := m.validationError(); err != nil {
+			return validationErrorCmd(err)
+		}
 
-	request := data.ResetPasswordTokenRequest{
-		Email: email,
-	}
-	message, err := request.Do(m.cfg.serverURL)
-	if err != nil {
-		return func() tea.Msg { return apiErrorResponseCmd(err) }
-	}
+		request := data.ResetPasswordTokenRequest{
+			Email: email,
+		}
+		message, err := request.Do(m.cfg.serverURL)
+		if err != nil {
+			return err
+		}
 
-	return apiSuccessResponseCmd(message.Message, m, m)
+		return apiSuccessResponseMsg{
+			msg:      message.Message,
+			source:   m,
+			redirect: m,
+		}
+	}
 }
 
 func (m resetPasswordPage) resetPassword() tea.Cmd {
-	token := m.fields[0].Value()
-	pasword := m.fields[1].Value()
+	return func() tea.Msg {
+		token := m.fields[0].Value()
+		pasword := m.fields[1].Value()
 
-	if err := m.validationError(); err != nil {
-		return validationErrorCmd(err)
-	}
+		if err := m.validationError(); err != nil {
+			return validationErrorCmd(err)
+		}
 
-	request := data.UserTokenRequest{
-		Token:    token,
-		Password: pasword,
-	}
-	message, err := request.ResetPassword(m.cfg.serverURL)
-	if err != nil {
-		return func() tea.Msg { return apiErrorResponseCmd(err) }
-	}
+		request := data.UserTokenRequest{
+			Token:    token,
+			Password: pasword,
+		}
+		message, err := request.ResetPassword(m.cfg.serverURL)
+		if err != nil {
+			return err
+		}
 
-	return apiSuccessResponseCmd(message.Message, m, newMenuPage(m.cfg, m.width, m.height))
+		return apiSuccessResponseMsg{
+			msg:      message.Message,
+			source:   m,
+			redirect: newMenuPage(m.cfg, m.width, m.height),
+		}
+	}
 }

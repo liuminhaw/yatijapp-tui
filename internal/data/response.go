@@ -68,6 +68,7 @@ type Target struct {
 	CreatedAt   time.Time    `json:"created_at"`
 	DueDate     sql.NullTime `json:"due_date"`
 	UpdatedAt   time.Time    `json:"updated_at"`
+	LastActive  time.Time    `json:"last_active"`
 	Title       string       `json:"title"`
 	Description string       `json:"description"`
 	Notes       string       `json:"notes"`

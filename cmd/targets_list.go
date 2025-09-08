@@ -58,7 +58,7 @@ func (t targetListPage) loadTargetListPage(msg string) tea.Cmd {
 
 		targets, err := data.ListTargets(t.cfg.serverURL, t.cfg.authClient)
 		if err != nil {
-			return apiErrorResponseCmd(err)
+			return err
 		}
 
 		return targetListLoadedMsg{
@@ -85,7 +85,7 @@ func (t targetListPage) deleteTarget(uuid, msg string) tea.Cmd {
 		t.clearMsg()
 		err := data.DeleteTarget(serverURL, uuid, t.cfg.authClient)
 		if err != nil {
-			return apiErrorResponseCmd(err)
+			return err
 		}
 
 		return targetDeletedMsg(msg)
@@ -197,11 +197,15 @@ func (t targetListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, t.loadTargetListPage(string(msg))
 	case confirmationMsg:
 		t.loading = false
-	case data.LoadApiDataErr:
+	case data.UnauthorizedApiDataErr:
 		t.cfg.logger.Error(msg.Error(), slog.Int("status", msg.Status), slog.String("action", "targets list"))
+		t.loading = false
+		return t, switchToMenuCmd
+	case data.UnexpectedApiDataErr:
+		t.cfg.logger.Error(msg.Error(), slog.String("action", "targets list"))
 		t.error = errors.New(msg.Msg)
 		t.loading = false
-	case unexpectedApiResponseMsg:
+	case error:
 		t.error = msg
 		t.loading = false
 	case spinner.TickMsg:
