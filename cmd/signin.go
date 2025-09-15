@@ -102,7 +102,7 @@ func (m signinPage) View() string {
 	email := m.fields[0]
 	password := m.fields[1]
 
-	titleView := style.TitleBarView("Sign In", viewWidth, false)
+	titleView := style.TitleBarView([]string{"Sign In"}, viewWidth, false)
 
 	signinForm := lipgloss.JoinVertical(
 		lipgloss.Left,

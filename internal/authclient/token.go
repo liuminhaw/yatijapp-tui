@@ -3,6 +3,7 @@ package authclient
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 )
 
 type Token struct {
@@ -26,6 +27,11 @@ func TokenRead(path string) (Token, error) {
 }
 
 func TokenWrite(t Token, path string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return err

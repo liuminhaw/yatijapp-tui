@@ -24,7 +24,7 @@ func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, err
 		nil,
 	)
 	if err != nil {
-		return []Target{}, UnauthorizedApiDataErr{
+		return []Target{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create GET request for Targets",
 		}
@@ -39,10 +39,9 @@ func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, err
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return []Target{}, UnauthorizedApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return []Target{}, UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
@@ -55,10 +54,9 @@ func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, err
 
 	var responseData ListTargetsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return []Target{}, UnauthorizedApiDataErr{
-			Status: resp.StatusCode,
-			Err:    err,
-			Msg:    "API response decode error",
+		return []Target{}, UnexpectedApiDataErr{
+			Err: err,
+			Msg: "API response decode error",
 		}
 	}
 
@@ -71,7 +69,7 @@ type GetTargetResponse struct {
 }
 
 func GetTarget(serverURL, uuid string, client *authclient.AuthClient) (Target, error) {
-	// time.Sleep(3 * time.Second) // Simulate a delay for loading targets
+	// time.Sleep(2 * time.Second) // Simulate a delay for loading targets
 
 	req, err := http.NewRequest(
 		http.MethodGet,
@@ -79,7 +77,7 @@ func GetTarget(serverURL, uuid string, client *authclient.AuthClient) (Target, e
 		nil,
 	)
 	if err != nil {
-		return Target{}, UnauthorizedApiDataErr{
+		return Target{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create GET request for Target",
 		}
@@ -94,10 +92,9 @@ func GetTarget(serverURL, uuid string, client *authclient.AuthClient) (Target, e
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return Target{}, UnauthorizedApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return Target{}, UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 
@@ -110,15 +107,15 @@ func GetTarget(serverURL, uuid string, client *authclient.AuthClient) (Target, e
 
 	var responseData GetTargetResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return Target{}, UnauthorizedApiDataErr{
-			Status: resp.StatusCode,
-			Err:    err,
-			Msg:    "API response decode error",
+		return Target{}, UnexpectedApiDataErr{
+			Err: err,
+			Msg: "API response decode error",
 		}
 	}
 
 	responseData.Target.CreatedAt = responseData.Target.CreatedAt.Local()
 	responseData.Target.UpdatedAt = responseData.Target.UpdatedAt.Local()
+	responseData.Target.LastActive = responseData.Target.LastActive.Local()
 
 	return responseData.Target, nil
 }
@@ -130,7 +127,7 @@ func DeleteTarget(serverURL, uuid string, client *authclient.AuthClient) error {
 		nil,
 	)
 	if err != nil {
-		return UnauthorizedApiDataErr{
+		return UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create DELETE request for target",
 		}
@@ -145,10 +142,9 @@ func DeleteTarget(serverURL, uuid string, client *authclient.AuthClient) error {
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return UnauthorizedApiDataErr{
-				Status: resp.StatusCode,
-				Err:    err,
-				Msg:    "API error response decode failure",
+			return UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
 			}
 		}
 

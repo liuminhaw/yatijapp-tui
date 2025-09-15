@@ -159,7 +159,7 @@ func (m signupPage) signupView() string {
 	password := m.fields[2]
 	passwordConfirm := m.fields[3]
 
-	titleView := style.TitleBarView("Sign Up", viewWidth, false)
+	titleView := style.TitleBarView([]string{"Sign Up"}, viewWidth, false)
 
 	form := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -221,7 +221,7 @@ func (m signupPage) activateView() string {
 	msg := "An email with activation token has been sent to you, please enter the token below to activate your account."
 	token := m.fields[0]
 
-	titleView := style.TitleBarView("Activate Account", viewWidth, false)
+	titleView := style.TitleBarView([]string{"Activate Account"}, viewWidth, false)
 
 	form := lipgloss.JoinVertical(
 		lipgloss.Center,

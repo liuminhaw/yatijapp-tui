@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/paginator"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/liuminhaw/yatijapp-tui/colors"
 )
 
 type ViewMode int
@@ -20,28 +22,35 @@ type ViewSize struct {
 	Height int
 }
 
-func TitleBarView(content string, width int, msg bool) string {
-	var title string
+func TitleBarView(contents []string, width int, msg bool) string {
+	title := DocumentStyle.Highlight.Render("Yatijapp")
+	if len(contents) == 0 {
+		return title
+	}
+
 	if msg {
-		title = DocumentStyle.Highlight.Render(
-			"Yatijapp",
-		) + DocumentStyle.Normal.Render(
-			" - ",
-		) + MsgStyle.Render(
-			content,
-		)
+		for _, content := range contents {
+			title += DocumentStyle.Normal.Render(" - ")
+			title += MsgStyle.Render(content)
+		}
 	} else {
-		title = DocumentStyle.Highlight.Render("Yatijapp") + DocumentStyle.Normal.Render(" - "+content)
+		if len(contents) == 1 {
+			title += DocumentStyle.NormalDim.Render(" - " + contents[0])
+		} else {
+			content := strings.Join(contents[:len(contents)-1], " - ")
+			title += DocumentStyle.Normal.Render(" - " + content)
+			title += DocumentStyle.NormalDim.Render(" - " + contents[len(contents)-1])
+		}
 	}
 
 	return BorderStyling.Width(width).Padding(0, 1).Render(title)
 }
 
 func LoadingView(s *spinner.Model, title string, sizing ViewSize) string {
-	titleBar := TitleBarView(title, sizing.Width, false)
+	titleBar := TitleBarView([]string{title}, sizing.Width, false)
 	helper := HelperView([]HelperContent{{Key: "<", Action: "back"}}, sizing.Width, NormalView)
 
-	msg := DocumentStyle.Normal.Bold(true).Render("loading...")
+	msg := DocumentStyle.NormalDim.Bold(true).Render("loading...")
 	s.Style = DocumentStyle.Highlight
 
 	return lipgloss.JoinVertical(
@@ -100,14 +109,14 @@ func SideBarView(contents []SideBarContent, width int) string {
 			if content.KeyHighlight {
 				decoratedKey = DocumentStyle.Highlight.Render(key)
 			} else {
-				decoratedKey = DocumentStyle.Normal.Render(key)
+				decoratedKey = DocumentStyle.NormalDim.Render(key)
 			}
 
 			var decoratedItem string
 			if item, exists := content.Items[key]; exists {
-				decoratedItem = DocumentStyle.Normal.Render(item)
+				decoratedItem = DocumentStyle.NormalDim.Render(item)
 			} else {
-				decoratedItem = DocumentStyle.Normal.Render("--")
+				decoratedItem = DocumentStyle.NormalDim.Render("--")
 			}
 			b.WriteString(fmt.Sprintf("%s: %s\n", decoratedKey, decoratedItem))
 		}
@@ -148,6 +157,22 @@ func ErrorView(sizing ViewSize, err error, helpMsg []HelperContent) string {
 	return errMsg
 }
 
+func FullPageErrorView(
+	title string,
+	termWidth int,
+	sizing ViewSize,
+	err error,
+	helpMsg []HelperContent,
+) string {
+	container := lipgloss.JoinVertical(
+		lipgloss.Center,
+		title,
+		ErrorView(sizing, err, helpMsg),
+	)
+
+	return ContainerStyle(termWidth, container, 5).Render(container)
+}
+
 type ConfirmCheckItem struct {
 	Label string // "Target", "Activity", "Session"
 	Value string
@@ -159,7 +184,7 @@ type ConfirmCheck struct {
 }
 
 func (c ConfirmCheck) View(title string, sizing ViewSize) string {
-	titleBar := TitleBarView(title, sizing.Width, false)
+	titleBar := TitleBarView([]string{title}, sizing.Width, false)
 	helper := HelperView(
 		[]HelperContent{{Key: "y", Action: "yes"}, {Key: "n", Action: "no"}},
 		sizing.Width,
@@ -180,4 +205,14 @@ func (c ConfirmCheck) View(title string, sizing ViewSize) string {
 			Render(b.String()),
 		helper,
 	)
+}
+
+func NewPaginator(perPage int) paginator.Model {
+	p := paginator.New()
+	p.Type = paginator.Dots
+	p.PerPage = perPage
+	p.ActiveDot = lipgloss.NewStyle().Foreground(colors.DocumentText).Render("•")
+	p.InactiveDot = lipgloss.NewStyle().Foreground(colors.HelperTextDim).Render("•")
+
+	return p
 }

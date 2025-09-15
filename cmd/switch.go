@@ -9,10 +9,18 @@ type (
 	switchToPreviousMsg struct {
 		model tea.Model
 	}
+	switchToRecordsMsg struct {
+		recordType data.RecordType
+		sourceUUID string
+	}
+	switchToViewMsg struct {
+		recordType data.RecordType
+		uuid       string
+	}
 
 	switchToTargetsMsg       struct{}
-	switchToActivitiesMsg    struct{}
-	switchToSessionsMsg      struct{}
+	switchToActivitiesMsg    struct{ info sourceInfo }
+	switchToSessionsMsg      struct{ activityUUID string }
 	switchToMenuMsg          struct{}
 	switchToSigninMsg        struct{}
 	switchToSignupMsg        struct{}
@@ -23,8 +31,19 @@ type (
 	}
 	switchToTargetCreateMsg struct{}
 	switchToTargetEditMsg   struct {
-		data data.Target
+		record yatijappRecord
 	}
+	switchToActivityViewMsg struct {
+		uuid string
+	}
+	switchToActivityCreateMsg struct {
+		parentTitle string
+		parentUUID  string
+	}
+	switchToActivityEditMsg struct {
+		record yatijappRecord
+	}
+	switchToTargetSelectorMsg struct{}
 )
 
 var (
@@ -45,23 +64,75 @@ func switchToPreviousCmd(model tea.Model) tea.Cmd {
 	}
 }
 
+func switchToRecordsCmd(recordType data.RecordType, srcUUID, srcTitle string) tea.Cmd {
+	return func() tea.Msg {
+		switch recordType {
+		case data.RecordTypeTarget:
+			return switchToActivitiesMsg{info: sourceInfo{uuid: srcUUID, title: srcTitle}}
+		case data.RecordTypeActivity:
+			return switchToSessionsMsg{}
+		}
+
+		panic("unsupported record type in switchToRecordsCmd")
+	}
+}
+
+func switchToViewCmd(recordType data.RecordType, uuid string) tea.Cmd {
+	return func() tea.Msg {
+		switch recordType {
+		case data.RecordTypeTarget:
+			return switchToTargetViewMsg{uuid: uuid}
+		case data.RecordTypeActivity:
+			return switchToActivityViewMsg{uuid: uuid}
+		}
+
+		panic("unsupported record type in switchToViewCmd")
+	}
+}
+
+func switchToCreateCmd(recordType data.RecordType, parentUUID, parentTitle string) tea.Cmd {
+	return func() tea.Msg {
+		switch recordType {
+		case data.RecordTypeTarget:
+			return switchToTargetCreateMsg{}
+		case data.RecordTypeActivity:
+			return switchToActivityCreateMsg{parentUUID: parentUUID, parentTitle: parentTitle}
+		}
+
+		panic("unsupported record type in switchToCreateCmd")
+	}
+}
+
+func switchToEditCmd(recordType data.RecordType, record yatijappRecord) tea.Cmd {
+	return func() tea.Msg {
+		switch recordType {
+		case data.RecordTypeTarget:
+			return switchToTargetEditMsg{record: record}
+		case data.RecordTypeActivity:
+			return switchToActivityEditMsg{record: record}
+		}
+
+		panic("unsupported record type in switchToEditCmd")
+	}
+}
+
 func switchToTargetViewCmd(uuid string) tea.Cmd {
 	return func() tea.Msg {
 		return switchToTargetViewMsg{uuid: uuid}
 	}
 }
 
-func switchToTargetEditCmd(target data.Target) tea.Cmd {
+func switchToActivityViewCmd(uuid string) tea.Cmd {
 	return func() tea.Msg {
-		return switchToTargetEditMsg{data: target}
+		return switchToActivityViewMsg{uuid: uuid}
 	}
 }
 
-func sendWindowSizeCmd(width, height int) tea.Cmd {
-	return func() tea.Msg {
-		return tea.WindowSizeMsg{
-			Width:  width,
-			Height: height,
-		}
-	}
-}
+// func sendWindowSizeCmd(width, height int) tea.Cmd {
+// 	return func() tea.Msg {
+// 		return tea.WindowSizeMsg{
+// 			Width:  width,
+// 			Height: height,
+// 		}
+// 	}
+// }

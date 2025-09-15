@@ -10,9 +10,11 @@ import (
 var DocumentStyle = struct {
 	Highlight lipgloss.Style
 	Normal    lipgloss.Style
+	NormalDim lipgloss.Style
 }{
 	Highlight: lipgloss.NewStyle().Foreground(colors.DocumentText).Bold(true),
-	Normal:    lipgloss.NewStyle().Foreground(colors.DocumentTextDim),
+	Normal:    lipgloss.NewStyle().Foreground(colors.DocumentText),
+	NormalDim: lipgloss.NewStyle().Foreground(colors.DocumentTextDim),
 }
 
 var (
@@ -60,15 +62,17 @@ var HelperStyle = map[ViewMode]struct {
 
 var ChoicesStyle = map[string]struct {
 	Choices       lipgloss.Style
+	ChoicesDim    lipgloss.Style
 	Choice        lipgloss.Style
 	ChoiceContent lipgloss.Style
 }{
 	"default": {
 		Choices: lipgloss.NewStyle().Foreground(colors.DocumentText),
-		Choice:  lipgloss.NewStyle().Foreground(colors.HighlightText).Bold(true),
+		Choice:  lipgloss.NewStyle().Foreground(colors.SelectionText).Bold(true),
 	},
 	"list": {
-		Choices: lipgloss.NewStyle().Foreground(colors.DocumentText),
+		Choices:    lipgloss.NewStyle().Foreground(colors.DocumentText),
+		ChoicesDim: lipgloss.NewStyle().Foreground(colors.DocumentTextDim),
 		Choice: lipgloss.NewStyle().
 			Foreground(colors.MainText).
 			Background(colors.MainBg).
@@ -110,4 +114,22 @@ func ContainerStyle(terminalWidth int, container string, marginHeight int) lipgl
 	containerWidthMargin := (terminalWidth - containerWidth) / 2
 
 	return lipgloss.NewStyle().Margin(marginHeight, containerWidthMargin, 0)
+}
+
+func StatusTextStyle(status string) lipgloss.Style {
+	var statusColor lipgloss.Style
+	switch status {
+	case "queued":
+		statusColor = lipgloss.NewStyle().Foreground(colors.Skin)
+	case "in progress":
+		statusColor = lipgloss.NewStyle().Foreground(colors.Cyan)
+	case "completed":
+		statusColor = lipgloss.NewStyle().Foreground(colors.Green)
+	case "canceled":
+		statusColor = lipgloss.NewStyle().Foreground(colors.Pale)
+	default:
+		statusColor = lipgloss.NewStyle().Foreground(colors.DocumentText)
+	}
+
+	return statusColor
 }

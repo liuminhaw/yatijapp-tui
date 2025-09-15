@@ -159,7 +159,7 @@ func (m resetPasswordPage) View() string {
 func (m resetPasswordPage) sendTokenView() string {
 	email := m.fields[0]
 
-	titleView := style.TitleBarView("Reset Password", viewWidth, false)
+	titleView := style.TitleBarView([]string{"Reset Password"}, viewWidth, false)
 
 	form := lipgloss.NewStyle().Width(resetPasswordFormWidth).Margin(1, 0, 0).Render(
 		fmt.Sprintf(
@@ -194,7 +194,7 @@ func (m resetPasswordPage) resetPasswordView() string {
 	password := m.fields[1]
 	passwordConfirm := m.fields[2]
 
-	titleView := style.TitleBarView("Reset Password", viewWidth, false)
+	titleView := style.TitleBarView([]string{"Reset Password"}, viewWidth, false)
 
 	form := lipgloss.JoinVertical(
 		lipgloss.Center,

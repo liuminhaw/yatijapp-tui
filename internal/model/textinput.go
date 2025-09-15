@@ -47,6 +47,12 @@ func (t *TextInputWrapper) Value() string {
 	return t.model.Value()
 }
 
+func (t *TextInputWrapper) SetValue(val string) error {
+	t.model.SetValue(val)
+
+	return nil
+}
+
 func (t *TextInputWrapper) Validate() {
 	if t.model.Validate != nil {
 		t.model.Err = t.model.Validate(t.model.Value())

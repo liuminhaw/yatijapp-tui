@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
+	"github.com/liuminhaw/yatijapp-tui/internal/data"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -21,6 +22,7 @@ type Focusable interface {
 	Update(tea.Msg) (tea.Model, tea.Cmd)
 	View() string
 	Value() string
+	SetValue(string) error
 
 	Validate()
 	Error() string
@@ -76,10 +78,10 @@ type mainModel struct {
 	cfg   config
 	ready bool
 
-	targetSettings targetPage
-	active         tea.Model
-	width          int
-	height         int
+	// targetSettings targetPage
+	active tea.Model
+	width  int
+	height int
 }
 
 func newMainModel(cfg config) mainModel {
@@ -115,10 +117,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchToResetPasswordMsg:
 		m.active = newResetPasswordPage(m.cfg, cmdCreate, style.ViewSize{Width: m.width, Height: m.height}, m.active)
 	case switchToTargetsMsg:
-		m.active = newTargetListPage(m.cfg, m.width, m.height)
+		m.active = newTargetListPage(m.cfg, style.ViewSize{Width: m.width, Height: m.height}, sourceInfo{}, m.active)
 		return m, m.active.Init()
 	case switchToTargetViewMsg:
-		m.active = newTargetViewPage(
+		m.active = newTargetViewPage2(
 			m.cfg,
 			msg.uuid,
 			style.ViewSize{Width: m.width, Height: m.height},
@@ -127,7 +129,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 		return m, m.active.Init()
 	case switchToTargetCreateMsg:
-		page, err := newTargetPage(
+		page, err := newTargetConfigPage(
 			m.cfg,
 			"New Target",
 			style.ViewSize{Width: m.width, Height: m.height},
@@ -140,11 +142,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.active = page
 	case switchToTargetEditMsg:
-		page, err := newTargetPage(
+		page, err := newTargetConfigPage(
 			m.cfg,
 			"Modify Target",
 			style.ViewSize{Width: m.width, Height: m.height},
-			&msg.data,
+			msg.record,
 			m.active,
 		)
 		if err != nil {
@@ -152,6 +154,64 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.active = page
+	case switchToActivityCreateMsg:
+		m.cfg.logger.Info("Switching to activity create page")
+		var record yatijappRecord
+		if msg != (switchToActivityCreateMsg{}) {
+			record = data.Activity{Status: "queued", TargetUUID: msg.parentUUID, TargetTitle: msg.parentTitle}
+		}
+
+		page, err := newActivityConfigPage(
+			m.cfg,
+			"New Activity",
+			style.ViewSize{Width: m.width, Height: m.height},
+			record,
+			m.active,
+		)
+		if err != nil {
+			// Switch to error view
+			m.cfg.logger.Error(err.Error(), slog.String("action", "switch to activity create page"))
+			return m, tea.Quit
+		}
+		m.active = page
+	case switchToActivityEditMsg:
+		page, err := newActivityConfigPage(
+			m.cfg,
+			"Modify Activity",
+			style.ViewSize{Width: m.width, Height: m.height},
+			msg.record,
+			m.active,
+		)
+		if err != nil {
+			// Switch to error view
+			return m, tea.Quit
+		}
+		m.active = page
+	case switchToActivitiesMsg:
+		m.active = newActivityListPage(
+			m.cfg,
+			style.ViewSize{Width: m.width, Height: m.height},
+			msg.info,
+			m.active,
+		)
+		return m, m.active.Init()
+	case switchToActivityViewMsg:
+		m.active = newActivityViewPage(
+			m.cfg,
+			msg.uuid,
+			style.ViewSize{Width: m.width, Height: m.height},
+			style.ViewSize{Width: viewWidth, Height: 20},
+			m.active, // Previous model for navigation
+		)
+		return m, m.active.Init()
+	case switchToSessionsMsg:
+		// m.active = newTargetSelectorPage(m.cfg, style.ViewSize{Width: m.width, Height: m.height}, m.active)
+		// return m, m.active.Init()
+	case switchToTargetSelectorMsg:
+		m.active = newTargetSelectorPage(m.cfg, style.ViewSize{Width: m.width, Height: m.height}, m.active)
+		return m, m.active.Init()
+	case selectorTargetSelectedMsg:
+		m.active = msg.model
 	case apiSuccessResponseMsg:
 		m.active = msg.redirect
 	}

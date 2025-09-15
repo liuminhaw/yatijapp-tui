@@ -114,6 +114,9 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "down", "k", "j":
 			m.msg = ""
 		}
+	case switchToPreviousMsg:
+		m.loading = true
+		return m, m.loadLoginUser()
 	case apiSuccessResponseMsg:
 		if isExactType[menuPage](msg.source) {
 			m.greeting = fmt.Sprintf("Welcome, %s", msg.msg)
@@ -151,7 +154,7 @@ func (m menuPage) View() string {
 	if m.error != nil {
 		container := lipgloss.JoinVertical(
 			lipgloss.Center,
-			style.TitleBarView("Menu", viewWidth, false),
+			style.TitleBarView([]string{"Menu"}, viewWidth, false),
 			style.ErrorView(
 				style.ViewSize{Width: 80, Height: 10},
 				m.error,
@@ -163,7 +166,7 @@ func (m menuPage) View() string {
 	}
 
 	if m.loading {
-		msg := style.DocumentStyle.Normal.Bold(true).Render("Yatijapp")
+		msg := style.DocumentStyle.NormalDim.Bold(true).Render("Yatijapp")
 		m.spinner.Style = style.DocumentStyle.Highlight
 		container := lipgloss.NewStyle().
 			Width(50).

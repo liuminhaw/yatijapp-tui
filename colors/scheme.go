@@ -16,8 +16,12 @@ var (
 	ErrorText              = lipgloss.AdaptiveColor{Light: "160", Dark: "169"}
 	WarningText            = lipgloss.AdaptiveColor{Light: "208", Dark: "202"}
 	MsgText                = lipgloss.AdaptiveColor{Light: "35", Dark: "41"}
-	HighlightText          = lipgloss.AdaptiveColor{Light: "29", Dark: "35"}
-	SelectionText          = lipgloss.AdaptiveColor{Light: "206", Dark: "207"}
+	SelectionText          = lipgloss.AdaptiveColor{Light: "206", Dark: "207"} // peach
 	BorderFg               = lipgloss.AdaptiveColor{Light: "63", Dark: "63"}
 	BorderDimFg            = lipgloss.AdaptiveColor{Light: "249", Dark: "240"}
+
+	Green = lipgloss.AdaptiveColor{Light: "29", Dark: "41"}
+	Cyan  = lipgloss.AdaptiveColor{Light: "73", Dark: "122"}
+	Skin  = lipgloss.AdaptiveColor{Light: "173", Dark: "222"}
+	Pale  = lipgloss.AdaptiveColor{Light: "102", Dark: "187"}
 )
