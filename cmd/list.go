@@ -9,10 +9,10 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/liuminhaw/yatijapp-tui/colors"
 	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
+	"github.com/liuminhaw/yatijapp-tui/pkg/strview"
 )
 
 type listHooks struct {
@@ -78,7 +78,7 @@ func newTargetListPage(
 	return page
 }
 
-func newActivityListPage(
+func newActionListPage(
 	cfg config,
 	termSize style.ViewSize,
 	// srcUUID string,
@@ -86,13 +86,13 @@ func newActivityListPage(
 	prev tea.Model,
 ) listPage {
 	page := newListPage(cfg, termSize, prev)
-	page.recordType = data.RecordTypeActivity
+	page.recordType = data.RecordTypeAction
 	// page.srcUUID = srcUUID
 	page.src = src
 	page.hooks = listHooks{
-		loadAll: loadAllActivities,
-		load:    loadActivity,
-		delete:  deleteActivity,
+		loadAll: loadAllActions,
+		load:    loadAction,
+		delete:  deleteAction,
 	}
 
 	return page
@@ -165,11 +165,13 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.paginator.PrevPage()
 			l.selected, _ = l.paginator.GetSliceBounds(len(l.records))
 		case "enter":
-			return l, switchToRecordsCmd(
-				l.recordType,
-				l.records[l.selected].GetUUID(),
-				l.records[l.selected].GetTitle(),
-			)
+			if len(l.records) > 0 {
+				return l, switchToRecordsCmd(
+					l.recordType,
+					l.records[l.selected].GetUUID(),
+					l.records[l.selected].GetTitle(),
+				)
+			}
 		case "<":
 			if l.error != nil {
 				l.error = nil
@@ -180,11 +182,15 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.clearMsg()
 			l.helper = !l.helper
 		case "v":
-			return l, switchToViewCmd(l.recordType, l.records[l.selected].GetUUID())
+			if len(l.records) > 0 {
+				return l, switchToViewCmd(l.recordType, l.records[l.selected].GetUUID())
+			}
 		case "e":
-			l.loading = true
-			l.clearMsg()
-			return l, l.hooks.load(l.cfg.serverURL, l.records[l.selected].GetUUID(), "", l.cfg.authClient)
+			if len(l.records) > 0 {
+				l.loading = true
+				l.clearMsg()
+				return l, l.hooks.load(l.cfg.serverURL, l.records[l.selected].GetUUID(), "", l.cfg.authClient)
+			}
 		case "d":
 			if len(l.records) == 0 {
 				return l, nil
@@ -194,24 +200,16 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch l.recordType {
 			case data.RecordTypeTarget:
 				prompt = "Proceed to delete target \"" + l.records[l.selected].GetTitle() + "\"?"
-				warning = "All activities and sessions under this target will be deleted as well."
-			case data.RecordTypeActivity:
-				prompt = "Proceed to delete activity \"" + l.records[l.selected].GetTitle() + "\"?"
-				warning = "All sessions under this activity will be deleted as well."
+				warning = "All actions and sessions under this target will be deleted as well."
+			case data.RecordTypeAction:
+				prompt = "Proceed to delete action \"" + l.records[l.selected].GetTitle() + "\"?"
+				warning = "All sessions under this action will be deleted as well."
 			}
 			l.setConfirmation(prompt, warning)
 			return l, confirmationCmd
 		case "n":
-			var parentUUID, parentTitle string
-			if l.src != (sourceInfo{}) {
-				parentUUID = l.records[l.selected].GetParentsUUID()[data.RecordTypeTarget]
-				parentTitle = l.records[l.selected].GetParentsTitle()[data.RecordTypeTarget]
-			}
-
-			return l, switchToCreateCmd(l.recordType, parentUUID, parentTitle)
+			return l, switchToCreateCmd(l.recordType, l.src.uuid, l.src.title)
 		case "ctrl+r":
-			// return l, switchToTargetsCmd
-			// return l, switchToRecordsCmd(l.recordType)
 			l.clearMsg()
 			return l, l.hooks.loadAll(l.cfg.serverURL, l.src.uuid, "Records refreshed", l.cfg.authClient)
 		}
@@ -227,7 +225,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.paginator.Page = l.paginator.TotalPages - 1
 		}
 		_, end := l.paginator.GetSliceBounds(len(l.records))
-		if l.selected >= end {
+		if l.selected >= end && l.selected > 0 {
 			l.selected = end - 1
 		}
 		l.loading = false
@@ -289,13 +287,11 @@ func (l listPage) View() string {
 		switch l.recordType {
 		case data.RecordTypeTarget:
 			title = style.TitleBarView([]string{"Targets"}, viewWidth, false)
-		case data.RecordTypeActivity:
+		case data.RecordTypeAction:
 			if l.src != (sourceInfo{}) {
-				// l.cfg.logger.Info(fmt.Sprintf("%+v", l.src))
-				title = style.TitleBarView([]string{l.src.title, "Activities"}, viewWidth, false)
-				// title = style.TitleBarView(l.src.title+" - Activities", viewWidth, false)
+				title = style.TitleBarView([]string{l.src.title, "Actions"}, viewWidth, false)
 			} else {
-				title = style.TitleBarView([]string{"Activities"}, viewWidth, false)
+				title = style.TitleBarView([]string{"Actions"}, viewWidth, false)
 			}
 		}
 	} else {
@@ -306,66 +302,57 @@ func (l listPage) View() string {
 		return style.FullPageErrorView(
 			title,
 			l.width,
-			style.ViewSize{Width: viewWidth, Height: 10},
+			style.ViewSize{Width: viewWidth, Height: 16},
 			l.error,
 			[]style.HelperContent{{Key: "<", Action: "back"}},
 		)
 	}
 
+	var popup string
 	if l.confirmation != nil {
-		container := l.confirmation.View(
-			"Confirm Deletion",
-			style.ViewSize{Width: viewWidth, Height: 10},
-		)
-		return style.ContainerStyle(l.width, container, 5).Render(container)
+		popup = l.confirmation.View("Confirm Deletion", 60)
+	} else if l.helper {
+		popup = helperPopup(20)
 	}
 
-	var sidebar string
-	if !l.helper {
-		sidebar = style.SideBarView([]style.SideBarContent{
-			{
-				Title: "Filters",
-				Items: map[string]string{},
-				Order: []string{"Status", "Search"},
-			},
-		}, 20)
-	} else {
-		sidebar = listPageSideBarHelper(20)
-	}
 	helperView := listPageHelper(viewWidth)
 
 	var content strings.Builder
 	start, end := l.paginator.GetSliceBounds(len(l.records))
 	for i, record := range l.records[start:end] {
-		content.WriteString(record.ListItemView(l.src == sourceInfo{}, i+start == l.selected, 57))
+		content.WriteString(
+			record.ListItemView(l.src == sourceInfo{}, i+start == l.selected, viewWidth),
+		)
 	}
 
 	for i := len(l.records[start:end]); i < l.paginator.PerPage; i++ {
 		content.WriteString("\n")
 	}
-	content.WriteString(l.paginator.View())
 
-	contentView := lipgloss.NewStyle().Height(lipgloss.Height(sidebar)).Render(content.String())
+	contentView := lipgloss.NewStyle().Render(content.String())
 
 	container := lipgloss.JoinVertical(
-		lipgloss.Left,
+		lipgloss.Center,
 		title,
-		lipgloss.NewStyle().Margin(1, 0, 0).Render(
-			lipgloss.JoinHorizontal(
-				lipgloss.Top,
-				sidebar,
-				lipgloss.NewStyle().
-					Margin(0, 1).
-					Padding(0, 0, 0, 2).
-					BorderStyle(lipgloss.NormalBorder()).
-					BorderForeground(colors.DocumentTextDim).
-					BorderLeft(true).
-					Render(contentView),
-			),
-		),
-		helperView,
+		contentView,
+		l.paginator.View(),
 	)
 
+	if len(l.records) > 0 {
+		selected := l.records[l.selected]
+		detailView := data.ListPageDetailView(
+			selected.ListItemDetailView(l.src == sourceInfo{}, viewWidth),
+			popup != "",
+		)
+		container = lipgloss.JoinVertical(lipgloss.Center, container, detailView)
+	}
+	container = lipgloss.JoinVertical(lipgloss.Center, container, helperView)
+
+	if popup != "" {
+		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(popup)/2
+		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(popup)/2
+		container = strview.PlaceOverlay(overlayX, overlayY, popup, container)
+	}
 	return style.ContainerStyle(l.width, container, 5).Render(container)
 }
 
@@ -373,8 +360,8 @@ func (l *listPage) clearMsg() {
 	l.msg = ""
 }
 
-func listPageSideBarHelper(width int) string {
-	return style.SideBarView([]style.SideBarContent{
+func helperPopup(width int) string {
+	return style.FullHelpView([]style.FullHelpContent{
 		{
 			Title: "Key Maps",
 			Items: map[string]string{

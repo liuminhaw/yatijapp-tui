@@ -44,7 +44,7 @@ func newSelectorPage(cfg config, termSize style.ViewSize, prev tea.Model) select
 		cfg: cfg,
 		// paginator: style.NewPaginator(10),
 		selection: recordsSelection{
-			p: style.NewPaginator(10),
+			p: style.NewPaginator(6),
 		},
 		// selection: model.NewSelectorModel([]data.YatijappRecord{}, 10, 70),
 		// text:      components.NewText(""),
@@ -132,97 +132,105 @@ func (p selectorPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p selectorPage) View() string {
+	var content strings.Builder
+
 	if p.loading {
-		container := style.LoadingView(
-			&p.spinner,
-			"Loading "+strings.ToLower(string(p.recordType))+"s",
-			style.ViewSize{Width: viewWidth, Height: 10},
+		msg := style.Document.NormalDim.Bold(true).Render("loading...")
+		p.spinner.Style = style.Document.Highlight
+		content.WriteString(p.spinner.View() + " " + msg)
+
+		container := lipgloss.JoinVertical(
+			lipgloss.Center,
+			lipgloss.NewStyle().
+				Width(78).
+				Height(10).
+				Align(lipgloss.Center, lipgloss.Center).
+				Render(content.String()),
+			style.Document.Primary.Render("<")+style.Document.Normal.Render(" back\n"),
 		)
-
-		return style.ContainerStyle(p.width, container, 5).Render(container)
+		return lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(colors.BorderDimFg).
+			Render(container)
 	}
-
-	title := style.TitleBarView([]string{"Select " + string(p.recordType)}, viewWidth, false)
 
 	if p.error != nil {
-		return style.FullPageErrorView(
-			title,
-			p.width,
-			style.ViewSize{Width: viewWidth, Height: 10},
-			p.error,
-			[]style.HelperContent{{Key: "<", Action: "back"}},
+		container := lipgloss.JoinVertical(
+			lipgloss.Center,
+			lipgloss.NewStyle().
+				Render(
+					style.ErrorView(style.ViewSize{Width: 72, Height: 10}, p.error, nil),
+				),
+			style.Document.Primary.Render("<")+style.Document.Normal.Render(" back\n"),
 		)
+		return lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(colors.BorderDimFg).
+			Render(container)
 	}
 
-	var content strings.Builder
+	title := style.Document.Secondary.Bold(true).
+		Render("Select " + strings.ToLower(string(p.recordType)))
+
 	start, end := p.selection.p.GetSliceBounds(len(p.selection.records))
 	for i, record := range p.selection.records[start:end] {
-		content.WriteString(selectionView(record, i+start == p.selection.selected, 70))
+		content.WriteString(selectionView(record, i+start == p.selection.selected, 72))
 	}
 
 	for i := len(p.selection.records[start:end]); i < p.selection.p.PerPage; i++ {
 		content.WriteString("\n")
 	}
-	content.WriteString(
-		lipgloss.NewStyle().Width(70).AlignHorizontal(lipgloss.Center).Render(p.selection.p.View()),
-	)
 
-	helperView := style.HelperView([]style.HelperContent{
-		{Key: "<", Action: "back"},
-		// {Key: "↑/↓/←/→", Action: "navigate"},
-		{Key: "arrow keys", Action: "navigate"},
-		{Key: "enter", Action: "select"},
-		{Key: "q", Action: "quit"},
-	}, viewWidth, style.NormalView)
+	helper := lipgloss.StyleRanges(
+		"< back    arrows navigate    enter select\n",
+		lipgloss.Range{Start: 0, End: 1, Style: style.Document.Primary},
+		lipgloss.Range{Start: 2, End: 6, Style: style.Document.Normal},
+		lipgloss.Range{Start: 10, End: 16, Style: style.Document.Primary},
+		lipgloss.Range{Start: 16, End: 25, Style: style.Document.Normal},
+		lipgloss.Range{Start: 28, End: 34, Style: style.Document.Primary},
+		lipgloss.Range{Start: 35, End: 31, Style: style.Document.Normal},
+	)
 
 	container := lipgloss.JoinVertical(
 		lipgloss.Center,
 		title,
 		lipgloss.NewStyle().
-			Height(15).
-			Margin(1).
-			Padding(1, 2, 0).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(colors.BorderDimFg).
+			Height(7).
+			Margin(1, 0, 0).
+			Padding(0, 2, 0).
 			Render(content.String()),
-		helperView,
+		lipgloss.NewStyle().
+			Width(70).
+			AlignHorizontal(lipgloss.Center).
+			Render(p.selection.p.View()),
+		helper,
 	)
 
-	return style.ContainerStyle(p.width, container, 5).Render(container)
+	return lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(colors.TextMuted).
+		Render(container)
 }
 
 func selectionView(record yatijappRecord, selected bool, width int) string {
-	var stringBuilder strings.Builder
+	var builder strings.Builder
 
 	if selected {
-		stringBuilder.WriteString(
-			lipgloss.NewStyle().Bold(true).Foreground(colors.DocumentText).Render("▸ ") +
-				style.ChoicesStyle["list"].Choice.
-					Width(width-3).
-					Render(" "+record.GetTitle()) + "\n",
+		builder.WriteString(
+			style.StatusTextStyle(record.GetStatus()).MarginLeft(1).Render("∎") +
+				style.ChoicesStyle["list"].Choice.Width(width-2).
+					Margin(0, 1, 0, 0).
+					Padding(0, 1, 0, 1).
+					Render(record.GetTitle()) + "\n",
 		)
-
-		hr := lipgloss.NewStyle().Foreground(colors.HelperText).
-			Render("  " + strings.Repeat("─", width-3))
-		stringBuilder.WriteString(hr + "\n")
-
-		var description string
-		if record.GetDescription() == "" {
-			description = "---"
-		} else {
-			description = strings.TrimSpace(record.GetDescription())
-		}
-		stringBuilder.WriteString(
-			style.ChoicesStyle["list"].ChoiceContent.
-				Width(width).
-				Render("  "+description) + "\n",
-		)
-		stringBuilder.WriteString(hr + "\n")
 	} else {
-		stringBuilder.WriteString(
-			style.ChoicesStyle["default"].Choices.Width(width).Render("▫ "+record.GetTitle()) + "\n",
+		builder.WriteString(
+			style.StatusTextStyle(record.GetStatus()).MarginLeft(1).Render("∎") +
+				lipgloss.NewStyle().Width(width).Padding(0, 1).Render(
+					style.ChoicesStyle["list"].Choices.Render(record.GetTitle()),
+				) + "\n",
 		)
 	}
 
-	return stringBuilder.String()
+	return builder.String()
 }

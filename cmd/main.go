@@ -154,30 +154,30 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.active = page
-	case switchToActivityCreateMsg:
-		m.cfg.logger.Info("Switching to activity create page")
+	case switchToActionCreateMsg:
+		m.cfg.logger.Info("Switching to action create page")
 		var record yatijappRecord
-		if msg != (switchToActivityCreateMsg{}) {
-			record = data.Activity{Status: "queued", TargetUUID: msg.parentUUID, TargetTitle: msg.parentTitle}
+		if msg != (switchToActionCreateMsg{}) {
+			record = data.Action{Status: "queued", TargetUUID: msg.parentUUID, TargetTitle: msg.parentTitle}
 		}
 
-		page, err := newActivityConfigPage(
+		page, err := newActionConfigPage(
 			m.cfg,
-			"New Activity",
+			"New Action",
 			style.ViewSize{Width: m.width, Height: m.height},
 			record,
 			m.active,
 		)
 		if err != nil {
 			// Switch to error view
-			m.cfg.logger.Error(err.Error(), slog.String("action", "switch to activity create page"))
+			m.cfg.logger.Error(err.Error(), slog.String("action", "switch to action create page"))
 			return m, tea.Quit
 		}
 		m.active = page
-	case switchToActivityEditMsg:
-		page, err := newActivityConfigPage(
+	case switchToActionEditMsg:
+		page, err := newActionConfigPage(
 			m.cfg,
-			"Modify Activity",
+			"Modify Action",
 			style.ViewSize{Width: m.width, Height: m.height},
 			msg.record,
 			m.active,
@@ -187,16 +187,16 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.active = page
-	case switchToActivitiesMsg:
-		m.active = newActivityListPage(
+	case switchToActionsMsg:
+		m.active = newActionListPage(
 			m.cfg,
 			style.ViewSize{Width: m.width, Height: m.height},
 			msg.info,
 			m.active,
 		)
 		return m, m.active.Init()
-	case switchToActivityViewMsg:
-		m.active = newActivityViewPage(
+	case switchToActionViewMsg:
+		m.active = newActionViewPage(
 			m.cfg,
 			msg.uuid,
 			style.ViewSize{Width: m.width, Height: m.height},

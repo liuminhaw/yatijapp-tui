@@ -19,8 +19,8 @@ type (
 	}
 
 	switchToTargetsMsg       struct{}
-	switchToActivitiesMsg    struct{ info sourceInfo }
-	switchToSessionsMsg      struct{ activityUUID string }
+	switchToActionsMsg       struct{ info sourceInfo }
+	switchToSessionsMsg      struct{ actionUUID string }
 	switchToMenuMsg          struct{}
 	switchToSigninMsg        struct{}
 	switchToSignupMsg        struct{}
@@ -33,14 +33,14 @@ type (
 	switchToTargetEditMsg   struct {
 		record yatijappRecord
 	}
-	switchToActivityViewMsg struct {
+	switchToActionViewMsg struct {
 		uuid string
 	}
-	switchToActivityCreateMsg struct {
+	switchToActionCreateMsg struct {
 		parentTitle string
 		parentUUID  string
 	}
-	switchToActivityEditMsg struct {
+	switchToActionEditMsg struct {
 		record yatijappRecord
 	}
 	switchToTargetSelectorMsg struct{}
@@ -48,7 +48,7 @@ type (
 
 var (
 	switchToTargetsCmd       = func() tea.Msg { return switchToTargetsMsg{} }
-	switchToActivitiesCmd    = func() tea.Msg { return switchToActivitiesMsg{} }
+	switchToActionsCmd       = func() tea.Msg { return switchToActionsMsg{} }
 	switchToSessionsCmd      = func() tea.Msg { return switchToSessionsMsg{} }
 	switchToMenuCmd          = func() tea.Msg { return switchToMenuMsg{} }
 	switchToSigninCmd        = func() tea.Msg { return switchToSigninMsg{} }
@@ -68,8 +68,8 @@ func switchToRecordsCmd(recordType data.RecordType, srcUUID, srcTitle string) te
 	return func() tea.Msg {
 		switch recordType {
 		case data.RecordTypeTarget:
-			return switchToActivitiesMsg{info: sourceInfo{uuid: srcUUID, title: srcTitle}}
-		case data.RecordTypeActivity:
+			return switchToActionsMsg{info: sourceInfo{uuid: srcUUID, title: srcTitle}}
+		case data.RecordTypeAction:
 			return switchToSessionsMsg{}
 		}
 
@@ -82,8 +82,8 @@ func switchToViewCmd(recordType data.RecordType, uuid string) tea.Cmd {
 		switch recordType {
 		case data.RecordTypeTarget:
 			return switchToTargetViewMsg{uuid: uuid}
-		case data.RecordTypeActivity:
-			return switchToActivityViewMsg{uuid: uuid}
+		case data.RecordTypeAction:
+			return switchToActionViewMsg{uuid: uuid}
 		}
 
 		panic("unsupported record type in switchToViewCmd")
@@ -95,8 +95,8 @@ func switchToCreateCmd(recordType data.RecordType, parentUUID, parentTitle strin
 		switch recordType {
 		case data.RecordTypeTarget:
 			return switchToTargetCreateMsg{}
-		case data.RecordTypeActivity:
-			return switchToActivityCreateMsg{parentUUID: parentUUID, parentTitle: parentTitle}
+		case data.RecordTypeAction:
+			return switchToActionCreateMsg{parentUUID: parentUUID, parentTitle: parentTitle}
 		}
 
 		panic("unsupported record type in switchToCreateCmd")
@@ -108,8 +108,8 @@ func switchToEditCmd(recordType data.RecordType, record yatijappRecord) tea.Cmd 
 		switch recordType {
 		case data.RecordTypeTarget:
 			return switchToTargetEditMsg{record: record}
-		case data.RecordTypeActivity:
-			return switchToActivityEditMsg{record: record}
+		case data.RecordTypeAction:
+			return switchToActionEditMsg{record: record}
 		}
 
 		panic("unsupported record type in switchToEditCmd")
@@ -122,9 +122,9 @@ func switchToTargetViewCmd(uuid string) tea.Cmd {
 	}
 }
 
-func switchToActivityViewCmd(uuid string) tea.Cmd {
+func switchToActionViewCmd(uuid string) tea.Cmd {
 	return func() tea.Msg {
-		return switchToActivityViewMsg{uuid: uuid}
+		return switchToActionViewMsg{uuid: uuid}
 	}
 }
 

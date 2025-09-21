@@ -17,11 +17,12 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/model"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 	"github.com/liuminhaw/yatijapp-tui/internal/validator"
+	"github.com/liuminhaw/yatijapp-tui/pkg/strview"
 )
 
 const (
-	titleInputViewWidth   = 40
-	dueDateInputViewWidth = 25
+	titleInputViewWidth   = 51
+	dueDateInputViewWidth = 14
 )
 
 type recordConfigHooks struct {
@@ -62,6 +63,8 @@ type recordConfigPage struct {
 
 	err  error
 	prev tea.Model // Previous model for navigation
+
+	selector tea.Model
 }
 
 func newRecordConfigPage(
@@ -103,12 +106,15 @@ func newRecordConfigPage(
 	description.CharLimit = 200
 	description.Validate = validator.ValidateReachMaxLength(200)
 
-	status := model.NewStatusModel([]string{"queued", "in progress", "completed", "canceled"})
+	status := model.NewStatusModel(
+		[]string{"queued", "in progress", "completed", "canceled"},
+		formWidth,
+	)
 
 	note := model.NewNoteModel()
 
-	// For activities, and sessions
-	parentTarget := components.NewText("", switchToTargetSelectorMsg{})
+	// For actions, and sessions
+	parentTarget := components.NewText("", showSelectorMsg{})
 	parentTarget.ValidateFunc = validator.ValidateRequired("target is required")
 
 	var uuid string
@@ -158,7 +164,7 @@ func newRecordConfigPage(
 	switch recordType {
 	case data.RecordTypeTarget:
 		focusables[0].Focus() // Focus name field
-	case data.RecordTypeActivity:
+	case data.RecordTypeAction:
 		focusables = append(focusables, parentTarget)
 		if record == nil {
 			focusables[5].Focus() // Focus parent target field
@@ -204,7 +210,7 @@ func newTargetConfigPage(
 	return page, nil
 }
 
-func newActivityConfigPage(
+func newActionConfigPage(
 	cfg config,
 	title string,
 	size style.ViewSize,
@@ -213,14 +219,14 @@ func newActivityConfigPage(
 	prev tea.Model,
 ) (recordConfigPage, error) {
 	page, err := newRecordConfigPage(
-		cfg, title, size, record, data.RecordTypeActivity, prev,
+		cfg, title, size, record, data.RecordTypeAction, prev,
 	)
 	if err != nil {
 		return recordConfigPage{}, err
 	}
 	page.hooks = recordConfigHooks{
-		create: createActivity,
-		update: updateActivity,
+		create: createAction,
+		update: updateAction,
 	}
 	if record == nil {
 		page.focused = len(page.fields) - 1
@@ -241,6 +247,9 @@ func (p recordConfigPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.width = msg.Width
 		p.height = msg.Height
 	case tea.KeyMsg:
+		if p.selector != nil {
+			break
+		}
 		switch p.mode {
 		case style.NormalView:
 			switch msg.String() {
@@ -283,9 +292,14 @@ func (p recordConfigPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return p, nil
 			}
 		}
+	case showSelectorMsg:
+		p.selector = newTargetSelectorPage(p.cfg, style.ViewSize{Width: p.width, Height: p.height}, p)
+		cmd := p.selector.Init()
+		cmds = append(cmds, cmd)
 	case selectorTargetSelectedMsg:
+		p.selector = nil
 		if len(p.fields) < 6 {
-			panic("activity config page missing target field")
+			panic("action config page missing target field")
 		}
 		p.fields[5].SetValue(msg.title)
 		// p.hiddenFields["parent_target_uuid"] = struct{ val string }{val: msg.uuid}
@@ -319,6 +333,14 @@ func (p recordConfigPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.fields[i] = retModel.(Focusable)
 		if retCmd != nil {
 			cmds = append(cmds, retCmd)
+		}
+	}
+
+	if p.selector != nil {
+		var cmd tea.Cmd
+		p.selector, cmd = p.selector.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 	}
 
@@ -407,7 +429,7 @@ func (p recordConfigPage) View() string {
 	)
 
 	var targetConfig string
-	if p.recordType == data.RecordTypeActivity {
+	if p.recordType == data.RecordTypeAction {
 		var content string
 		if targetSource.View() == "" {
 			content = lipgloss.NewStyle().Foreground(colors.HelperTextDim).Render("target UUID")
@@ -455,10 +477,15 @@ func (p recordConfigPage) View() string {
 		lipgloss.Center,
 		titleView,
 		configContent,
-		// lipgloss.NewStyle().Background(colors.Green).Render(configContent),
 		msgView,
 		helperView,
 	)
+
+	if p.selector != nil {
+		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(p.selector.View())/2
+		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(p.selector.View())/2
+		container = strview.PlaceOverlay(overlayX, overlayY, p.selector.View(), container)
+	}
 
 	return style.ContainerStyle(p.width, container, 5).Render(container)
 }
@@ -485,17 +512,11 @@ func (p recordConfigPage) create() tea.Cmd {
 		note:        note,
 		dueDate:     due,
 	}
-	if p.recordType == data.RecordTypeActivity {
-		// targetUUID, ok := p.hiddenFields["parent_target_uuid"]
-		// if !ok {
-		// 	panic("activity creation missing parent target UUID")
-		// }
-		// d.targetUUID = targetUUID.val
+	if p.recordType == data.RecordTypeAction {
 		d.targetUUID = p.hiddenFields["parent_target_uuid"]
 	}
 
 	return p.hooks.create(p.cfg.serverURL, d, p, p.prevPage(), p.cfg.authClient)
-	// return p.hooks.create(p.cfg.serverURL, d, p, p.prev, p.cfg.authClient)
 }
 
 func (p recordConfigPage) update() tea.Cmd {
@@ -517,21 +538,15 @@ func (p recordConfigPage) update() tea.Cmd {
 		note:        note,
 		dueDate:     due,
 	}
-	if p.recordType == data.RecordTypeActivity {
-		// targetUUID, ok := p.hiddenFields["parent_target_uuid"]
-		// if !ok {
-		// 	panic("activity update missing parent target UUID")
-		// }
-		// d.targetUUID = targetUUID.val
+	if p.recordType == data.RecordTypeAction {
 		d.targetUUID = p.hiddenFields["parent_target_uuid"]
 	}
 
 	return p.hooks.update(p.cfg.serverURL, d, p, p.prevPage(), p.cfg.authClient)
-	// return p.hooks.update(p.cfg.serverURL, d, p, p.prev, p.cfg.authClient)
 }
 
 func (p recordConfigPage) parentTargetField() (string, Focusable) {
-	if p.recordType != data.RecordTypeActivity {
+	if p.recordType != data.RecordTypeAction {
 		return "", nil
 	}
 
@@ -550,7 +565,7 @@ func (p recordConfigPage) parentTargetField() (string, Focusable) {
 
 func (p recordConfigPage) prevPage() tea.Model {
 	if v, ok := p.prev.(listPage); ok {
-		if v.src.uuid != p.hiddenFields["parent_target_uuid"] {
+		if v.src.uuid != "" && v.src.uuid != p.hiddenFields["parent_target_uuid"] {
 			v.src.uuid = p.hiddenFields["parent_target_uuid"]
 			v.src.title = p.hiddenFields["parent_target_title"]
 			return v

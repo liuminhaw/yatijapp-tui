@@ -16,7 +16,7 @@ type ListTargetsResponse struct {
 }
 
 func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, error) {
-	// time.Sleep(3 * time.Second) // Simulate a delay for loading targets
+	// time.Sleep(1 * time.Second) // Simulate a delay for loading targets
 
 	req, err := http.NewRequest(
 		http.MethodGet,

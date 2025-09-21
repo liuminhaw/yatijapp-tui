@@ -53,7 +53,7 @@ func newViewPage(
 	vp := viewport.New(vpSize.Width, vpSize.Height)
 	vp.Style = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colors.BorderDimFg)
+		BorderForeground(colors.TextMuted)
 
 	return viewPage{
 		cfg:      cfg,
@@ -80,16 +80,16 @@ func newTargetViewPage2(
 	return page
 }
 
-func newActivityViewPage(
+func newActionViewPage(
 	cfg config,
 	uuid string,
 	termSize, vpSize style.ViewSize,
 	prev tea.Model,
 ) viewPage {
 	page := newViewPage(cfg, uuid, termSize, vpSize, prev)
-	page.recordType = data.RecordTypeActivity
-	page.hooks.load = loadActivity
-	page.hooks.delete = deleteActivity
+	page.recordType = data.RecordTypeAction
+	page.hooks.load = loadAction
+	page.hooks.delete = deleteAction
 	return page
 }
 
@@ -138,10 +138,10 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch v.record.GetActualType() {
 			case data.RecordTypeTarget:
 				prompt = "Proceed to delete target \"" + v.record.GetTitle() + "\"?"
-				warning = "All activities and sessions under this target will be deleted as well."
-			case data.RecordTypeActivity:
-				prompt = "Proceed to delete activity \"" + v.record.GetTitle() + "\"?"
-				warning = "All sessions under this activity will be deleted as well."
+				warning = "All actions and sessions under this target will be deleted as well."
+			case data.RecordTypeAction:
+				prompt = "Proceed to delete action \"" + v.record.GetTitle() + "\"?"
+				warning = "All sessions under this action will be deleted as well."
 			}
 			v.setConfirmation(prompt, warning)
 			return v, nil
@@ -222,14 +222,6 @@ func (v viewPage) View() string {
 		)
 	}
 
-	if v.confirmation != nil {
-		container := v.confirmation.View(
-			"Confirm Deletion",
-			style.ViewSize{Width: viewWidth, Height: 10},
-		)
-		return style.ContainerStyle(v.width, container, 5).Render(container)
-	}
-
 	helperView := style.HelperView([]style.HelperContent{
 		{Key: "<", Action: "back"},
 		{Key: "↑/↓", Action: "scroll"},
@@ -254,7 +246,7 @@ func (v viewPage) viewportContent() string {
 	content.WriteString("# " + v.record.GetTitle() + "\n")
 	content.WriteString(v.record.GetDescription() + "\n\n")
 
-	if v.recordType == data.RecordTypeActivity {
+	if v.recordType == data.RecordTypeAction {
 		content.WriteString("## Upstream\n")
 		content.WriteString(
 			"- **Target:** " + v.record.GetParentsTitle()[data.RecordTypeTarget] + "\n\n",

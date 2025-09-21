@@ -27,6 +27,7 @@ type (
 		err error
 	}
 
+	showSelectorMsg           struct{}
 	selectorTargetSelectedMsg struct {
 		model tea.Model
 		title string

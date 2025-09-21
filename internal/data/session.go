@@ -19,7 +19,7 @@ func Signout(serverURL string, client *authclient.AuthClient) (Message, error) {
 
 	req, err := http.NewRequest(
 		http.MethodDelete,
-		fmt.Sprintf("%s/v1/sessions/%s", serverURL, token.SessionUUID),
+		fmt.Sprintf("%s/v1/tokens/sessions/%s", serverURL, token.SessionUUID),
 		nil,
 	)
 	if err != nil {

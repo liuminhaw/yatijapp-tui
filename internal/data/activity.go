@@ -9,28 +9,28 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
 )
 
-type ListActivitiesResponse struct {
-	Metadata   Metadata   `json:"metadata"`
-	Activities []Activity `json:"activities"`
-	Error      string     `json:"error,omitempty"`
+type ListActionsResponse struct {
+	Metadata Metadata `json:"metadata"`
+	Actions  []Action `json:"actions"`
+	Error    string   `json:"error,omitempty"`
 }
 
-func ListActivities(
+func ListActions(
 	serverURL string,
 	client *authclient.AuthClient,
 	srcUUID string,
-) ([]Activity, error) {
+) ([]Action, error) {
 	var path string
 	var err error
 	if srcUUID == "" {
-		path, err = url.JoinPath(serverURL, "v1", "activities")
+		path, err = url.JoinPath(serverURL, "v1", "actions")
 	} else {
-		path, err = url.JoinPath(serverURL, "v1", "targets", srcUUID, "activities")
+		path, err = url.JoinPath(serverURL, "v1", "targets", srcUUID, "actions")
 	}
 	if err != nil {
-		return []Activity{}, UnexpectedApiDataErr{
+		return []Action{}, UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create URL path for GET Target Activities",
+			Msg: "Failed to create URL path for GET Target Actions",
 		}
 	}
 
@@ -40,110 +40,110 @@ func ListActivities(
 		nil,
 	)
 	if err != nil {
-		return []Activity{}, UnauthorizedApiDataErr{
+		return []Action{}, UnauthorizedApiDataErr{
 			Err: err,
-			Msg: "Failed to create GET request for Activities",
+			Msg: "Failed to create GET request for Actions",
 		}
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return []Activity{}, respErrorCheck(err, "API request error: GET Activities")
+		return []Action{}, respErrorCheck(err, "API request error: GET Actions")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return []Activity{}, UnexpectedApiDataErr{
+			return []Action{}, UnexpectedApiDataErr{
 				Err: err,
 				Msg: "API error response decode failure",
 			}
 		}
 
-		return []Activity{}, UnauthorizedApiDataErr{
+		return []Action{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
 		}
 	}
 
-	var responseData ListActivitiesResponse
+	var responseData ListActionsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return []Activity{}, UnexpectedApiDataErr{
+		return []Action{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API response decode error",
 		}
 	}
 
-	return responseData.Activities, nil
+	return responseData.Actions, nil
 }
 
-type GetActivityResponse struct {
-	Activity Activity `json:"activity"`
-	Error    string   `json:"error,omitempty"`
+type GetActionResponse struct {
+	Action Action `json:"action"`
+	Error  string `json:"error,omitempty"`
 }
 
-func GetActivity(serverURL, uuid string, client *authclient.AuthClient) (Activity, error) {
-	path, err := url.JoinPath(serverURL, "v1", "activities", uuid)
+func GetAction(serverURL, uuid string, client *authclient.AuthClient) (Action, error) {
+	path, err := url.JoinPath(serverURL, "v1", "actions", uuid)
 	if err != nil {
-		return Activity{}, UnexpectedApiDataErr{
+		return Action{}, UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create URL path for GET Activity",
+			Msg: "Failed to create URL path for GET Action",
 		}
 	}
 
 	req, err := http.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
-		return Activity{}, UnexpectedApiDataErr{
+		return Action{}, UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create GET request for Activity",
+			Msg: "Failed to create GET request for Action",
 		}
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return Activity{}, respErrorCheck(err, "API request error: GET Activity")
+		return Action{}, respErrorCheck(err, "API request error: GET Action")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return Activity{}, UnexpectedApiDataErr{
+			return Action{}, UnexpectedApiDataErr{
 				Err: err,
 				Msg: "API error response decode failure",
 			}
 		}
 
-		return Activity{}, UnauthorizedApiDataErr{
+		return Action{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
 		}
 	}
 
-	var responseData GetActivityResponse
+	var responseData GetActionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return Activity{}, UnexpectedApiDataErr{
+		return Action{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API response decode error",
 		}
 	}
 
-	responseData.Activity.CreatedAt = responseData.Activity.CreatedAt.Local()
-	responseData.Activity.UpdatedAt = responseData.Activity.UpdatedAt.Local()
-	responseData.Activity.LastActive = responseData.Activity.LastActive.Local()
+	responseData.Action.CreatedAt = responseData.Action.CreatedAt.Local()
+	responseData.Action.UpdatedAt = responseData.Action.UpdatedAt.Local()
+	responseData.Action.LastActive = responseData.Action.LastActive.Local()
 
-	return responseData.Activity, nil
+	return responseData.Action, nil
 }
 
-func DeleteActivity(serverURL, uuid string, client *authclient.AuthClient) error {
-	path, err := url.JoinPath(serverURL, "v1", "activities", uuid)
+func DeleteAction(serverURL, uuid string, client *authclient.AuthClient) error {
+	path, err := url.JoinPath(serverURL, "v1", "actions", uuid)
 	if err != nil {
 		return UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create URL path for DELETE Activity",
+			Msg: "Failed to create URL path for DELETE Action",
 		}
 	}
 
@@ -151,13 +151,13 @@ func DeleteActivity(serverURL, uuid string, client *authclient.AuthClient) error
 	if err != nil {
 		return UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create DELETE request for Activity",
+			Msg: "Failed to create DELETE request for Action",
 		}
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return respErrorCheck(err, "API request error: DELETE Activity")
+		return respErrorCheck(err, "API request error: DELETE Action")
 	}
 	defer resp.Body.Close()
 
@@ -180,7 +180,7 @@ func DeleteActivity(serverURL, uuid string, client *authclient.AuthClient) error
 	return nil
 }
 
-type ActivityRequestBody struct {
+type ActionRequestBody struct {
 	TargetUUID  string `json:"target_uuid"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -189,12 +189,12 @@ type ActivityRequestBody struct {
 	Status      string `json:"status"`
 }
 
-func (b ActivityRequestBody) Create(serverURL string, client *authclient.AuthClient) error {
-	path, err := url.JoinPath(serverURL, "v1", "activities")
+func (b ActionRequestBody) Create(serverURL string, client *authclient.AuthClient) error {
+	path, err := url.JoinPath(serverURL, "v1", "actions")
 	if err != nil {
 		return UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create URL path for POST Activity",
+			Msg: "Failed to create URL path for POST Action",
 		}
 	}
 	data, err := json.Marshal(b)
@@ -209,14 +209,14 @@ func (b ActivityRequestBody) Create(serverURL string, client *authclient.AuthCli
 	if err != nil {
 		return UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create POST request for Activity",
+			Msg: "Failed to create POST request for Action",
 		}
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return respErrorCheck(err, "API request error: POST Activity")
+		return respErrorCheck(err, "API request error: POST Action")
 	}
 	defer resp.Body.Close()
 
@@ -239,14 +239,14 @@ func (b ActivityRequestBody) Create(serverURL string, client *authclient.AuthCli
 	return nil
 }
 
-func (b ActivityRequestBody) Update(
+func (b ActionRequestBody) Update(
 	serverURL, uuid string, client *authclient.AuthClient,
 ) error {
-	path, err := url.JoinPath(serverURL, "v1", "activities", uuid)
+	path, err := url.JoinPath(serverURL, "v1", "actions", uuid)
 	if err != nil {
 		return UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create URL path for PATCH Activity",
+			Msg: "Failed to create URL path for PATCH Action",
 		}
 	}
 
@@ -262,14 +262,14 @@ func (b ActivityRequestBody) Update(
 	if err != nil {
 		return UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create PATCH request for Activity",
+			Msg: "Failed to create PATCH request for Action",
 		}
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return respErrorCheck(err, "API request error: PATCH Activity")
+		return respErrorCheck(err, "API request error: PATCH Action")
 	}
 	defer resp.Body.Close()
 

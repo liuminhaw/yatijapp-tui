@@ -23,23 +23,23 @@ type ViewSize struct {
 }
 
 func TitleBarView(contents []string, width int, msg bool) string {
-	title := DocumentStyle.Highlight.Render("Yatijapp")
+	title := Document.Highlight.Render("Yatijapp")
 	if len(contents) == 0 {
 		return title
 	}
 
 	if msg {
 		for _, content := range contents {
-			title += DocumentStyle.Normal.Render(" - ")
+			title += Document.Normal.Render(" - ")
 			title += MsgStyle.Render(content)
 		}
 	} else {
 		if len(contents) == 1 {
-			title += DocumentStyle.NormalDim.Render(" - " + contents[0])
+			title += Document.NormalDim.Render(" - " + contents[0])
 		} else {
 			content := strings.Join(contents[:len(contents)-1], " - ")
-			title += DocumentStyle.Normal.Render(" - " + content)
-			title += DocumentStyle.NormalDim.Render(" - " + contents[len(contents)-1])
+			title += Document.Normal.Render(" - " + content)
+			title += Document.NormalDim.Render(" - " + contents[len(contents)-1])
 		}
 	}
 
@@ -50,8 +50,8 @@ func LoadingView(s *spinner.Model, title string, sizing ViewSize) string {
 	titleBar := TitleBarView([]string{title}, sizing.Width, false)
 	helper := HelperView([]HelperContent{{Key: "<", Action: "back"}}, sizing.Width, NormalView)
 
-	msg := DocumentStyle.NormalDim.Bold(true).Render("loading...")
-	s.Style = DocumentStyle.Highlight
+	msg := Document.NormalDim.Bold(true).Render("loading...")
+	s.Style = Document.Highlight
 
 	return lipgloss.JoinVertical(
 		lipgloss.Center,
@@ -93,37 +93,44 @@ func HelperView(contents []HelperContent, width int, mode ViewMode) string {
 		Render(b.String())
 }
 
-type SideBarContent struct {
+type FullHelpContent struct {
 	Title        string
 	Items        map[string]string
 	Order        []string // Order of items to maintain display order
 	KeyHighlight bool
 }
 
-func SideBarView(contents []SideBarContent, width int) string {
+func FullHelpView(contents []FullHelpContent, width int) string {
 	var b strings.Builder
 	for _, content := range contents {
-		b.WriteString(DocumentStyle.Highlight.Render(content.Title) + "\n\n")
-		for _, key := range content.Order {
+		b.WriteString(Document.Primary.Bold(true).Render(content.Title) + "\n\n")
+		for i, key := range content.Order {
 			var decoratedKey string
 			if content.KeyHighlight {
-				decoratedKey = DocumentStyle.Highlight.Render(key)
+				decoratedKey = Document.Highlight.Render(key)
 			} else {
-				decoratedKey = DocumentStyle.NormalDim.Render(key)
+				decoratedKey = Document.NormalDim.Render(key)
 			}
 
 			var decoratedItem string
 			if item, exists := content.Items[key]; exists {
-				decoratedItem = DocumentStyle.NormalDim.Render(item)
+				decoratedItem = Document.NormalDim.Render(item)
 			} else {
-				decoratedItem = DocumentStyle.NormalDim.Render("--")
+				decoratedItem = Document.NormalDim.Render("--")
 			}
-			b.WriteString(fmt.Sprintf("%s: %s\n", decoratedKey, decoratedItem))
+			b.WriteString(decoratedKey + Document.NormalDim.Render(": ") + decoratedItem)
+			if i < len(content.Order)-1 {
+				b.WriteString("\n")
+			}
 		}
-		b.WriteString("\n")
 	}
 
-	return lipgloss.NewStyle().Width(width).Padding(0, 1).Render(b.String())
+	return lipgloss.NewStyle().
+		Width(width).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(colors.Text).
+		Padding(0, 1).
+		Render(b.String())
 }
 
 func MsgView(sizing ViewSize, msg string) string {
@@ -174,7 +181,7 @@ func FullPageErrorView(
 }
 
 type ConfirmCheckItem struct {
-	Label string // "Target", "Activity", "Session"
+	Label string // "Target", "Action", "Session"
 	Value string
 }
 
@@ -183,27 +190,28 @@ type ConfirmCheck struct {
 	Warning string
 }
 
-func (c ConfirmCheck) View(title string, sizing ViewSize) string {
-	titleBar := TitleBarView([]string{title}, sizing.Width, false)
-	helper := HelperView(
-		[]HelperContent{{Key: "y", Action: "yes"}, {Key: "n", Action: "no"}},
-		sizing.Width,
-		NormalView,
-	)
-
+func (c ConfirmCheck) View(title string, width int) string {
 	var b strings.Builder
-	b.WriteString(DocumentStyle.Highlight.Render(c.Prompt) + "\n\n")
-	b.WriteString(WarningStyle.Render(c.Warning) + "\n")
+	b.WriteString(Document.Secondary.Bold(true).Render(title) + "\n\n")
+	b.WriteString(Document.Highlight.Render(c.Prompt) + "\n")
+	b.WriteString(ErrorStyle.Render(c.Warning) + "\n\n")
+	b.WriteString(lipgloss.StyleRanges(
+		"[y]es        [n]o",
+		lipgloss.Range{Start: 0, End: 3, Style: Document.Primary},
+		lipgloss.Range{Start: 3, End: 5, Style: Document.Normal},
+		lipgloss.Range{Start: 13, End: 16, Style: Document.Primary},
+		lipgloss.Range{Start: 16, End: 17, Style: Document.Normal},
+	))
 
 	return lipgloss.JoinVertical(
 		lipgloss.Center,
-		titleBar,
 		lipgloss.NewStyle().
-			Width(sizing.Width).
-			Height(sizing.Height).
+			Width(width).
 			Align(lipgloss.Center, lipgloss.Center).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(colors.Text).
+			Padding(0, 1).
 			Render(b.String()),
-		helper,
 	)
 }
 

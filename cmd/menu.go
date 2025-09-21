@@ -40,7 +40,7 @@ func newMenuPage(cfg config, width, height int) menuPage {
 		cfg:   cfg,
 		title: menuTitle(),
 		authView: menuView([][]string{
-			{"Targets", "Activities", "Sessions", "", "Sign out"},
+			{"Targets", "Actions", "Sessions", "", "Sign out"},
 			// {"Profile", "", "Sign out"},
 		}),
 		unauthView: menuView([][]string{
@@ -90,8 +90,8 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.view[m.viewPage].Selected() {
 			case "Targets":
 				return m, switchToTargetsCmd
-			case "Activities":
-				return m, switchToActivitiesCmd
+			case "Actions":
+				return m, switchToActionsCmd
 			case "Sessions":
 				return m, switchToSessionsCmd
 			case "Sign out":
@@ -156,7 +156,7 @@ func (m menuPage) View() string {
 			lipgloss.Center,
 			style.TitleBarView([]string{"Menu"}, viewWidth, false),
 			style.ErrorView(
-				style.ViewSize{Width: 80, Height: 10},
+				style.ViewSize{Width: 80, Height: 16},
 				m.error,
 				[]style.HelperContent{{Key: "q", Action: "quit"}},
 			),
@@ -166,8 +166,8 @@ func (m menuPage) View() string {
 	}
 
 	if m.loading {
-		msg := style.DocumentStyle.NormalDim.Bold(true).Render("Yatijapp")
-		m.spinner.Style = style.DocumentStyle.Highlight
+		msg := style.Document.NormalDim.Bold(true).Render("Yatijapp")
+		m.spinner.Style = style.Document.Highlight
 		container := lipgloss.NewStyle().
 			Width(50).
 			Height(10).
@@ -179,7 +179,7 @@ func (m menuPage) View() string {
 
 	greetingView := lipgloss.NewStyle().
 		Width(50).
-		Foreground(colors.DocumentText).
+		Foreground(colors.Primary).
 		Bold(true).
 		Render(m.greeting)
 
@@ -187,7 +187,7 @@ func (m menuPage) View() string {
 		Width(20).
 		Padding(1, 2).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colors.DocumentTextDim).
+		BorderForeground(colors.Border).
 		Render(m.title)
 
 	mainView := lipgloss.JoinHorizontal(
@@ -252,9 +252,9 @@ func (m menuPage) signout() tea.Cmd {
 
 func menuTitle() string {
 	highlight := lipgloss.NewStyle().
-		Foreground(colors.DocumentText).
+		Foreground(colors.Text).
 		Bold(true)
-	normal := lipgloss.NewStyle().Foreground(colors.DocumentTextDim)
+	normal := lipgloss.NewStyle().Foreground(colors.TextMuted)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		highlight.Render("Y")+normal.Render("et"),
@@ -268,7 +268,7 @@ func menuTitle() string {
 func menuView(options [][]string) []components.Radio {
 	var radios []components.Radio
 	for _, opts := range options {
-		radio := components.NewRadio(opts, components.RadioListView)
+		radio := components.NewRadio(opts, components.RadioListView, 26)
 		radio.Focus()
 		radios = append(radios, radio)
 	}

@@ -7,20 +7,24 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/colors"
 )
 
-var DocumentStyle = struct {
+var Document = struct {
+	Primary   lipgloss.Style
+	Secondary lipgloss.Style
 	Highlight lipgloss.Style
 	Normal    lipgloss.Style
 	NormalDim lipgloss.Style
 }{
-	Highlight: lipgloss.NewStyle().Foreground(colors.DocumentText).Bold(true),
-	Normal:    lipgloss.NewStyle().Foreground(colors.DocumentText),
-	NormalDim: lipgloss.NewStyle().Foreground(colors.DocumentTextDim),
+	Primary:   lipgloss.NewStyle().Foreground(colors.Primary),
+	Secondary: lipgloss.NewStyle().Foreground(colors.Secondary),
+	Highlight: lipgloss.NewStyle().Foreground(colors.Text).Bold(true),
+	Normal:    lipgloss.NewStyle().Foreground(colors.Text),
+	NormalDim: lipgloss.NewStyle().Foreground(colors.TextMuted),
 }
 
 var (
-	MsgStyle     lipgloss.Style = lipgloss.NewStyle().Foreground(colors.MsgText).Bold(true)
-	WarningStyle lipgloss.Style = lipgloss.NewStyle().Foreground(colors.WarningText).Bold(true)
-	ErrorStyle   lipgloss.Style = lipgloss.NewStyle().Foreground(colors.ErrorText).Bold(true)
+	MsgStyle     lipgloss.Style = lipgloss.NewStyle().Foreground(colors.Success).Bold(true)
+	WarningStyle lipgloss.Style = lipgloss.NewStyle().Foreground(colors.Warning).Bold(true)
+	ErrorStyle   lipgloss.Style = lipgloss.NewStyle().Foreground(colors.Danger).Bold(true)
 )
 
 var InputStyle = struct {
@@ -35,10 +39,9 @@ var InputStyle = struct {
 		Background(colors.MainBg).
 		Padding(0, 2).
 		Bold(true),
-	Prompt: lipgloss.NewStyle().Foreground(colors.DocumentText).Bold(true),
-	// Selected: lipgloss.NewStyle().Foreground(colors.SelectionText).Bold(true),
-	Selected: lipgloss.NewStyle().Foreground(colors.DocumentTextBright).Bold(true),
-	Document: lipgloss.NewStyle().Foreground(colors.DocumentText),
+	Prompt:   lipgloss.NewStyle().Foreground(colors.Primary).Bold(true),
+	Selected: lipgloss.NewStyle().Foreground(colors.Secondary).Bold(true),
+	Document: lipgloss.NewStyle().Foreground(colors.Text),
 	Helper:   lipgloss.NewStyle().Foreground(colors.HelperText).Italic(true),
 }
 
@@ -67,15 +70,15 @@ var ChoicesStyle = map[string]struct {
 	ChoiceContent lipgloss.Style
 }{
 	"default": {
-		Choices: lipgloss.NewStyle().Foreground(colors.DocumentText),
-		Choice:  lipgloss.NewStyle().Foreground(colors.SelectionText).Bold(true),
+		Choices: lipgloss.NewStyle().Foreground(colors.TextMuted),
+		Choice:  lipgloss.NewStyle().Foreground(colors.Text).Bold(true),
 	},
 	"list": {
-		Choices:    lipgloss.NewStyle().Foreground(colors.DocumentText),
+		Choices:    lipgloss.NewStyle().Foreground(colors.Text),
 		ChoicesDim: lipgloss.NewStyle().Foreground(colors.DocumentTextDim),
 		Choice: lipgloss.NewStyle().
-			Foreground(colors.MainText).
-			Background(colors.MainBg).
+			Foreground(colors.BgLight).
+			Background(colors.Text).
 			Bold(true),
 		ChoiceContent: lipgloss.NewStyle().Foreground(colors.DocumentText),
 	},
@@ -83,27 +86,20 @@ var ChoicesStyle = map[string]struct {
 
 var BorderStyling lipgloss.Style = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(colors.DocumentTextDim)
+	BorderForeground(colors.Border)
 
 var FormFieldStyle = struct {
 	Content lipgloss.Style
 	Helper  lipgloss.Style
 	Error   lipgloss.Style
-	// Prompt  func(bool) lipgloss.Style
-	Prompt func(string, bool) string
+	Prompt  func(string, bool) string
 }{
 	Content: InputStyle.Document,
 	Helper:  InputStyle.Helper,
 	Error:   ErrorStyle,
-	// Prompt: func(focused bool) lipgloss.Style {
-	// 	if focused {
-	// 		return InputStyle.Selected
-	// 	}
-	// 	return InputStyle.Prompt
-	// },
 	Prompt: func(s string, focused bool) string {
 		if focused {
-			return InputStyle.Selected.Render(fmt.Sprintf("‣ %s", s))
+			return InputStyle.Selected.Render(fmt.Sprintf("%s", s))
 		}
 		return InputStyle.Prompt.Render(s)
 	},
@@ -116,20 +112,35 @@ func ContainerStyle(terminalWidth int, container string, marginHeight int) lipgl
 	return lipgloss.NewStyle().Margin(marginHeight, containerWidthMargin, 0)
 }
 
-func StatusTextStyle(status string) lipgloss.Style {
-	var statusColor lipgloss.Style
+func StatusColor(status string) lipgloss.AdaptiveColor {
 	switch status {
 	case "queued":
-		statusColor = lipgloss.NewStyle().Foreground(colors.Skin)
+		return colors.Warning
 	case "in progress":
-		statusColor = lipgloss.NewStyle().Foreground(colors.Cyan)
+		return colors.Info
 	case "completed":
-		statusColor = lipgloss.NewStyle().Foreground(colors.Green)
+		return colors.Success
 	case "canceled":
-		statusColor = lipgloss.NewStyle().Foreground(colors.Pale)
+		return colors.Danger
 	default:
-		statusColor = lipgloss.NewStyle().Foreground(colors.DocumentText)
+		return colors.Text
+	}
+}
+
+func StatusTextStyle(status string) lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(StatusColor(status))
+}
+
+func CalculateGap(width int, fields ...string) (int, int, bool) {
+	fieldsLength := 0
+	for _, field := range fields {
+		fieldsLength += lipgloss.Width(field)
 	}
 
-	return statusColor
+	if fieldsLength >= width {
+		return 0, 0, false
+	}
+
+	return (width - fieldsLength) / (len(fields) - 1),
+		(width - fieldsLength) % (len(fields) - 1), true
 }

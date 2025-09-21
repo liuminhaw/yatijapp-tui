@@ -34,7 +34,7 @@ func ValidateDate(formats []string) func(string) error {
 				return nil
 			}
 		}
-		return errors.New("invalid date format")
+		return errors.New("invalid format")
 	}
 }
 

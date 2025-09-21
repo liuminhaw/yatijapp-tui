@@ -7,12 +7,14 @@ import (
 
 type StatusModel struct {
 	model components.Radio
+
+	width int
 	err   error
 }
 
-func NewStatusModel(choices []string) *StatusModel {
+func NewStatusModel(choices []string, width int) *StatusModel {
 	return &StatusModel{
-		model: components.NewRadio(choices, components.RadioDefaultView),
+		model: components.NewRadio(choices, components.RadioDefaultView, width),
 	}
 }
 

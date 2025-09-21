@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,15 +21,17 @@ type Radio struct {
 	selected int
 	focused  bool
 	viewType int
+	width    int
 }
 
-func NewRadio(options []string, viewType int) Radio {
+func NewRadio(options []string, viewType, width int) Radio {
 	return Radio{
 		options:  options,
 		choice:   "",
 		selected: 0,
 		focused:  false,
 		viewType: viewType,
+		width:    width,
 	}
 }
 
@@ -152,19 +155,34 @@ func (r Radio) defaultView() string {
 	for i, option := range r.options {
 		if i == r.selected {
 			options[i] = style.ChoicesStyle["default"].Choice.Render(
-				fmt.Sprintf("✓ %s\t", option),
+				"✓ " + option,
 			)
 		} else {
 			options[i] = style.ChoicesStyle["default"].Choices.Render(
-				fmt.Sprintf("- %s\t", option),
+				"- " + option,
 			)
 		}
 	}
 
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		options...,
-	)
+	gap, remain, ok := style.CalculateGap(r.width, options...)
+	if !ok {
+		gap = 1
+		remain = 0
+	}
+
+	var builder strings.Builder
+	for i, option := range options {
+		builder.WriteString(option)
+		if i < len(options)-1 {
+			builder.WriteString(strings.Repeat(" ", gap))
+			if remain > 0 {
+				builder.WriteString(" ")
+				remain--
+			}
+		}
+	}
+
+	return builder.String()
 }
 
 func (r Radio) listView() string {
@@ -172,7 +190,7 @@ func (r Radio) listView() string {
 	for i, option := range r.options {
 		if i == r.selected {
 			options[i] = style.ChoicesStyle["list"].Choice.Width(26).Padding(0, 1).Render(
-				fmt.Sprintf("‣ %s", option),
+				fmt.Sprintf("%s", option),
 			)
 		} else {
 			options[i] = style.ChoicesStyle["list"].Choices.Width(26).Padding(0, 1).Render(

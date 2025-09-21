@@ -22,8 +22,12 @@ type yatijappRecord interface {
 	GetLastActive() time.Time
 	GetParentsUUID() map[data.RecordType]string
 	GetParentsTitle() map[data.RecordType]string
+	GetChildrenCount() int64
+
+	HasNote() bool
 
 	ListItemView(hasSrc, chosen bool, width int) string
+	ListItemDetailView(hasSrc bool, width int) string
 }
 
 type (
@@ -47,15 +51,15 @@ type (
 	}
 	targetDeletedMsg string
 
-	activityListLoadedMsg struct {
-		activities []data.Activity
-		msg        string
+	actionListLoadedMsg struct {
+		actions []data.Action
+		msg     string
 	}
-	getActivityLoadedMsg struct {
-		activity data.Activity
-		msg      string
+	getActionLoadedMsg struct {
+		action data.Action
+		msg    string
 	}
-	activityDeletedMsg string
+	actionDeletedMsg string
 
 	apiSuccessResponseMsg struct {
 		msg      string
@@ -83,16 +87,16 @@ func loadAllTargets(serverURL, nilUUID, msg string, client *authclient.AuthClien
 	}
 }
 
-func loadAllActivities(serverURL, srcUUID, msg string, client *authclient.AuthClient) tea.Cmd {
+func loadAllActions(serverURL, srcUUID, msg string, client *authclient.AuthClient) tea.Cmd {
 	return func() tea.Msg {
-		activities, err := data.ListActivities(serverURL, client, srcUUID)
+		actions, err := data.ListActions(serverURL, client, srcUUID)
 		if err != nil {
 			return err
 		}
 
-		records := make([]yatijappRecord, len(activities))
-		for i, activity := range activities {
-			records[i] = activity
+		records := make([]yatijappRecord, len(actions))
+		for i, action := range actions {
+			records[i] = action
 		}
 
 		return allRecordsLoadedMsg{
@@ -116,15 +120,15 @@ func loadTarget(serverURL, uuid, msg string, client *authclient.AuthClient) tea.
 	}
 }
 
-func loadActivity(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Cmd {
+func loadAction(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Cmd {
 	return func() tea.Msg {
-		activity, err := data.GetActivity(serverURL, uuid, client)
+		action, err := data.GetAction(serverURL, uuid, client)
 		if err != nil {
 			return err
 		}
 
 		return getRecordLoadedMsg{
-			record: activity,
+			record: action,
 			msg:    msg,
 		}
 	}
@@ -140,13 +144,13 @@ func deleteTarget(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd
 	}
 }
 
-func deleteActivity(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd {
+func deleteAction(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd {
 	return func() tea.Msg {
-		if err := data.DeleteActivity(serverURL, uuid, client); err != nil {
+		if err := data.DeleteAction(serverURL, uuid, client); err != nil {
 			return err
 		}
 
-		return recordDeletedMsg("Activity deleted successfully.")
+		return recordDeletedMsg("Action deleted successfully.")
 	}
 }
 
@@ -158,7 +162,7 @@ type recordRequestData struct {
 	status      string
 	note        string
 	dueDate     string
-	// Activity specific
+	// Action specific
 	targetUUID string
 }
 
@@ -179,8 +183,8 @@ func (d recordRequestData) targetRequestBody() data.TargetRequestBody {
 	return body
 }
 
-func (d recordRequestData) activityRequestBody() data.ActivityRequestBody {
-	body := data.ActivityRequestBody{
+func (d recordRequestData) actionRequestBody() data.ActionRequestBody {
+	body := data.ActionRequestBody{
 		TargetUUID:  d.targetUUID,
 		Title:       d.title,
 		Description: d.description,
@@ -237,40 +241,40 @@ func updateTarget(
 	}
 }
 
-func createActivity(
+func createAction(
 	serverURL string,
 	d recordRequestData,
 	src, redirect tea.Model,
 	client *authclient.AuthClient,
 ) tea.Cmd {
 	return func() tea.Msg {
-		request := d.activityRequestBody()
+		request := d.actionRequestBody()
 		if err := request.Create(serverURL, client); err != nil {
 			return err
 		}
 
 		return apiSuccessResponseMsg{
-			msg:      "Activity created successfully",
+			msg:      "Action created successfully",
 			source:   src,
 			redirect: redirect,
 		}
 	}
 }
 
-func updateActivity(
+func updateAction(
 	serverURL string,
 	d recordRequestData,
 	src, redirect tea.Model,
 	client *authclient.AuthClient,
 ) tea.Cmd {
 	return func() tea.Msg {
-		request := d.activityRequestBody()
+		request := d.actionRequestBody()
 		if err := request.Update(serverURL, d.uuid, client); err != nil {
 			return err
 		}
 
 		return apiSuccessResponseMsg{
-			msg:      "Activity updated successfully",
+			msg:      "Action updated successfully",
 			source:   src,
 			redirect: redirect,
 		}
