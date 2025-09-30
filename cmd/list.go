@@ -1,9 +1,12 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/paginator"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -19,6 +22,12 @@ type listHooks struct {
 	loadAll func(serverURL, srcUUID, msg string, client *authclient.AuthClient) tea.Cmd
 	load    func(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Cmd
 	delete  func(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd
+	update  func(
+		serverURL, msg string,
+		d recordRequestData,
+		src, redirect tea.Model,
+		client *authclient.AuthClient,
+	) tea.Cmd
 }
 
 type listPage struct {
@@ -41,9 +50,11 @@ type listPage struct {
 	msg   string
 	error error
 
-	// srcUUID string
-	src  sourceInfo
+	src  data.RecordParents
 	prev tea.Model // Previous model for navigation
+
+	popupModel tea.Model
+	popup      string
 }
 
 func newListPage(cfg config, termSize style.ViewSize, prev tea.Model) listPage {
@@ -61,13 +72,11 @@ func newListPage(cfg config, termSize style.ViewSize, prev tea.Model) listPage {
 func newTargetListPage(
 	cfg config,
 	termSize style.ViewSize,
-	src sourceInfo,
-	// srcUUID string,
+	src data.RecordParents,
 	prev tea.Model,
 ) listPage {
 	page := newListPage(cfg, termSize, prev)
 	page.recordType = data.RecordTypeTarget
-	// page.srcUUID = srcUUID
 	page.src = src
 	page.hooks = listHooks{
 		loadAll: loadAllTargets,
@@ -81,13 +90,13 @@ func newTargetListPage(
 func newActionListPage(
 	cfg config,
 	termSize style.ViewSize,
-	// srcUUID string,
-	src sourceInfo,
+	src data.RecordParents,
 	prev tea.Model,
 ) listPage {
+	cfg.logger.Info("Creating new action list page", slog.Any("src", src))
+
 	page := newListPage(cfg, termSize, prev)
 	page.recordType = data.RecordTypeAction
-	// page.srcUUID = srcUUID
 	page.src = src
 	page.hooks = listHooks{
 		loadAll: loadAllActions,
@@ -98,19 +107,74 @@ func newActionListPage(
 	return page
 }
 
-func (l *listPage) setConfirmation(prompt, warning string) {
-	l.confirmation = &style.ConfirmCheck{Prompt: prompt, Warning: warning}
+func newSessionListPage(
+	cfg config,
+	termSize style.ViewSize,
+	src data.RecordParents,
+	prev tea.Model,
+) listPage {
+	page := newListPage(cfg, termSize, prev)
+	page.recordType = data.RecordTypeSession
+	page.src = src
+	page.hooks = listHooks{
+		loadAll: loadAllSessions,
+		load:    loadSession,
+		delete:  deleteSession,
+		update:  updateSession,
+	}
+
+	return page
+}
+
+func (l *listPage) setConfirmation(prompt, warning string, cmd tea.Cmd) {
+	l.confirmation = &style.ConfirmCheck{Prompt: prompt, Warning: warning, Cmd: cmd}
 }
 
 func (l listPage) Init() tea.Cmd {
 	return tea.Batch(
 		l.spinner.Tick,
-		l.hooks.loadAll(l.cfg.serverURL, l.src.uuid, "", l.cfg.authClient),
+		l.hooks.loadAll(
+			l.cfg.serverURL,
+			l.src[l.recordType.GetParentType()].UUID,
+			"",
+			l.cfg.authClient,
+		),
 	)
 }
 
 func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case showSelectorMsg:
+		switch msg.selection {
+		case data.RecordTypeTarget:
+			l.popupModel = newTargetSelectorPage(l.cfg, style.ViewSize{Width: l.width, Height: l.height}, l)
+		case data.RecordTypeAction:
+			targetUUID := ""
+			if configModel, ok := l.popupModel.(recordConfigPage); ok {
+				targetUUID = configModel.hiddenFields["parent_target_uuid"]
+			} else {
+				panic("action selector without target config model as popupModel")
+			}
+			l.popupModel = newActionSelectorPage(
+				l.cfg, style.ViewSize{Width: l.width, Height: l.height}, targetUUID, l,
+			)
+		}
+		cmd := l.popupModel.Init()
+		cmds = append(cmds, cmd)
+		l.popup = l.popupModel.View()
+	}
+	if l.popupModel != nil {
+		var cmd tea.Cmd
+		l.popupModel, cmd = l.popupModel.Update(msg)
+		l.popup = l.popupModel.View()
+		cmds = append(cmds, cmd)
+
+		return l, tea.Batch(cmds...)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		l.width = msg.Width
@@ -119,11 +183,14 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if l.confirmation != nil {
 			switch msg.String() {
 			case "y":
+				execCmd := l.confirmation.Cmd
 				l.confirmation = nil
+				l.popup = ""
 				l.clearMsg()
-				return l, l.hooks.delete(l.cfg.serverURL, l.records[l.selected].GetUUID(), l.cfg.authClient)
+				return l, execCmd
 			case "n":
 				l.confirmation = nil
+				l.popup = ""
 				return l, nil
 			default:
 				return l, nil
@@ -166,11 +233,28 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.selected, _ = l.paginator.GetSliceBounds(len(l.records))
 		case "enter":
 			if len(l.records) > 0 {
-				return l, switchToRecordsCmd(
-					l.recordType,
-					l.records[l.selected].GetUUID(),
-					l.records[l.selected].GetTitle(),
-				)
+				if l.recordType == data.RecordTypeSession {
+					session := l.records[l.selected].(data.Session)
+					if session.EndsAt.Valid {
+						return l, nil
+					}
+
+					updateCmd := l.hooks.update(
+						l.cfg.serverURL,
+						"Session ended",
+						recordRequestData{
+							uuid:       l.records[l.selected].GetUUID(),
+							endsAt:     sql.NullTime{Valid: true, Time: time.Now()},
+							actionUUID: l.records[l.selected].GetParentsUUID()[data.RecordTypeAction],
+						},
+						l, l,
+						l.cfg.authClient,
+					)
+					l.setConfirmation("Proceed to end session \""+l.records[l.selected].GetTitle()+"\"?", "", updateCmd)
+					l.popup = l.confirmation.View("Confirm End Session", 60)
+					return l, confirmationCmd
+				}
+				return l, switchToRecordsCmd(l.records[l.selected])
 			}
 		case "<":
 			if l.error != nil {
@@ -181,6 +265,11 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			l.clearMsg()
 			l.helper = !l.helper
+			if l.helper {
+				l.helperPopup(20)
+			} else {
+				l.popup = ""
+			}
 		case "v":
 			if len(l.records) > 0 {
 				return l, switchToViewCmd(l.recordType, l.records[l.selected].GetUUID())
@@ -204,19 +293,60 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case data.RecordTypeAction:
 				prompt = "Proceed to delete action \"" + l.records[l.selected].GetTitle() + "\"?"
 				warning = "All sessions under this action will be deleted as well."
+			case data.RecordTypeSession:
+				prompt = "Proceed to delete session \"" + l.records[l.selected].GetTitle() + "\"?"
 			}
-			l.setConfirmation(prompt, warning)
+			deleteCmd := l.hooks.delete(l.cfg.serverURL, l.records[l.selected].GetUUID(), l.cfg.authClient)
+			l.setConfirmation(prompt, warning, deleteCmd)
+			l.popup = l.confirmation.View("Confirm Deletion", 60)
 			return l, confirmationCmd
 		case "n":
-			return l, switchToCreateCmd(l.recordType, l.src.uuid, l.src.title)
+			return l, switchToCreateCmd(l.recordType, l.src)
 		case "ctrl+r":
 			l.clearMsg()
-			return l, l.hooks.loadAll(l.cfg.serverURL, l.src.uuid, "Records refreshed", l.cfg.authClient)
+			return l, l.hooks.loadAll(
+				l.cfg.serverURL,
+				l.src[l.recordType.GetParentType()].UUID,
+				"Records refreshed",
+				l.cfg.authClient,
+			)
 		}
+	case showSessionCreateMsg:
+		var record yatijappRecord
+		if !msg.parents.IsEmpty() {
+			record = data.Session{
+				TargetUUID:  msg.parents.UUID(data.RecordTypeTarget),
+				TargetTitle: msg.parents.Title(data.RecordTypeTarget),
+				ActionUUID:  msg.parents.UUID(data.RecordTypeAction),
+				ActionTitle: msg.parents.Title(data.RecordTypeAction),
+			}
+		}
+
+		l.cfg.logger.Info("new session config page", slog.Any("src", l.src))
+		var err error
+		l.popupModel, err = newSessionConfigPage(
+			l.cfg,
+			"New Session",
+			style.ViewSize{Width: l.width, Height: l.height},
+			record,
+			l,
+		)
+		if err != nil {
+			l.cfg.logger.Error(err.Error(), slog.String("action", "show new session popup"))
+			return l, tea.Quit
+		}
+		l.cfg.logger.Info("new session popup", slog.Any("record", l.popupModel))
+
+		l.popup = l.popupModel.View()
 	case switchToPreviousMsg:
 		l.loading = true
 		l.clearMsg()
-		return l, l.hooks.loadAll(l.cfg.serverURL, l.src.uuid, "", l.cfg.authClient)
+		return l, l.hooks.loadAll(
+			l.cfg.serverURL,
+			l.src.UUID(l.recordType.GetParentType()),
+			"",
+			l.cfg.authClient,
+		)
 	case allRecordsLoadedMsg:
 		l.msg = msg.msg
 		l.records = msg.records
@@ -234,13 +364,21 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return l, switchToEditCmd(l.recordType, msg.record)
 	case recordDeletedMsg:
 		l.clearMsg()
-		return l, l.hooks.loadAll(l.cfg.serverURL, l.src.uuid, string(msg), l.cfg.authClient)
+		return l, l.hooks.loadAll(
+			l.cfg.serverURL,
+			l.src.UUID(l.recordType.GetParentType()),
+			string(msg),
+			l.cfg.authClient,
+		)
 	case confirmationMsg:
 		l.loading = false
 	case apiSuccessResponseMsg:
 		l.loading = true
 		l.clearMsg()
-		return l, l.hooks.loadAll(l.cfg.serverURL, l.src.uuid, msg.msg, l.cfg.authClient)
+		l.cfg.logger.Info("api success", slog.Any("src", l.src))
+		return l, l.hooks.loadAll(
+			l.cfg.serverURL, l.src.UUID(l.recordType.GetParentType()), msg.msg, l.cfg.authClient,
+		)
 	case data.UnauthorizedApiDataErr:
 		l.cfg.logger.Error(
 			msg.Error(),
@@ -268,7 +406,9 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	l.paginator, cmd = l.paginator.Update(msg)
-	return l, cmd
+	cmds = append(cmds, cmd)
+
+	return l, tea.Batch(cmds...)
 }
 
 func (l listPage) View() string {
@@ -288,11 +428,20 @@ func (l listPage) View() string {
 		case data.RecordTypeTarget:
 			title = style.TitleBarView([]string{"Targets"}, viewWidth, false)
 		case data.RecordTypeAction:
-			if l.src != (sourceInfo{}) {
-				title = style.TitleBarView([]string{l.src.title, "Actions"}, viewWidth, false)
+			if t := l.src.Title(l.recordType.GetParentType()); t != "" {
+				title = style.TitleBarView([]string{t, "Actions"}, viewWidth, false)
 			} else {
 				title = style.TitleBarView([]string{"Actions"}, viewWidth, false)
 			}
+		case data.RecordTypeSession:
+			if a := l.src.Title(l.recordType.GetParentType()); a != "" {
+				t := l.src.Title(data.RecordTypeTarget)
+				title = style.TitleBarView([]string{t, a, "Sessions"}, viewWidth, false)
+			} else {
+				title = style.TitleBarView([]string{"Sessions"}, viewWidth, false)
+			}
+		default:
+			panic("unsupported record type in list page view")
 		}
 	} else {
 		title = style.TitleBarView([]string{l.msg}, viewWidth, true)
@@ -308,20 +457,17 @@ func (l listPage) View() string {
 		)
 	}
 
-	var popup string
-	if l.confirmation != nil {
-		popup = l.confirmation.View("Confirm Deletion", 60)
-	} else if l.helper {
-		popup = helperPopup(20)
-	}
-
-	helperView := listPageHelper(viewWidth)
+	helperView := l.listPageHelper(viewWidth)
 
 	var content strings.Builder
 	start, end := l.paginator.GetSliceBounds(len(l.records))
 	for i, record := range l.records[start:end] {
 		content.WriteString(
-			record.ListItemView(l.src == sourceInfo{}, i+start == l.selected, viewWidth),
+			record.ListItemView(
+				l.src[l.recordType.GetParentType()] == data.RecordParent{},
+				i+start == l.selected,
+				viewWidth,
+			),
 		)
 	}
 
@@ -341,17 +487,20 @@ func (l listPage) View() string {
 	if len(l.records) > 0 {
 		selected := l.records[l.selected]
 		detailView := data.ListPageDetailView(
-			selected.ListItemDetailView(l.src == sourceInfo{}, viewWidth),
-			popup != "",
+			selected.ListItemDetailView(
+				l.src[l.recordType.GetParentType()] == data.RecordParent{},
+				viewWidth,
+			),
+			l.popup != "",
 		)
 		container = lipgloss.JoinVertical(lipgloss.Center, container, detailView)
 	}
 	container = lipgloss.JoinVertical(lipgloss.Center, container, helperView)
 
-	if popup != "" {
-		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(popup)/2
-		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(popup)/2
-		container = strview.PlaceOverlay(overlayX, overlayY, popup, container)
+	if l.popup != "" {
+		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(l.popup)/2
+		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(l.popup)/2
+		container = strview.PlaceOverlay(overlayX, overlayY, l.popup, container)
 	}
 	return style.ContainerStyle(l.width, container, 5).Render(container)
 }
@@ -360,37 +509,64 @@ func (l *listPage) clearMsg() {
 	l.msg = ""
 }
 
-func helperPopup(width int) string {
-	return style.FullHelpView([]style.FullHelpContent{
+func (l *listPage) helperPopup(width int) {
+	recordType := string(l.recordType)
+	items := map[string]string{
+		"<":     "Back to menu",
+		"↑/↓":   "Navigate",
+		"q":     "Quit",
+		"n":     "New " + strings.ToLower(recordType),
+		"v":     "View " + strings.ToLower(recordType),
+		"e":     "Edit " + strings.ToLower(recordType),
+		"d":     "Delete " + strings.ToLower(recordType),
+		"f":     "Filter",
+		"<C-r>": "Refresh",
+		"?":     "Toggle helper",
+	}
+	order := []string{"<", "↑/↓", "q", "n", "v", "e", "d", "f", "<C-r>", "?"}
+
+	var enterValue string
+	if l.recordType == data.RecordTypeSession && len(l.records) > 0 &&
+		!l.records[l.selected].(data.Session).EndsAt.Valid {
+		enterValue = "End session"
+	} else if l.recordType != data.RecordTypeSession {
+		enterValue = "Select"
+	}
+
+	if enterValue != "" {
+		items["Enter"] = enterValue
+		order = slices.Insert(order, 2, "Enter")
+	}
+
+	l.popup = style.FullHelpView([]style.FullHelpContent{
 		{
-			Title: "Key Maps",
-			Items: map[string]string{
-				"<":     "Back to menu",
-				"↑/↓":   "Navigate",
-				"Enter": "Select",
-				"q":     "Quit",
-				"n":     "New target",
-				"v":     "View target",
-				"e":     "Edit target",
-				"d":     "Delete target",
-				"f":     "Filter",
-				"<C-r>": "Refresh",
-				"?":     "Toggle helper",
-			},
-			Order: []string{
-				"<", "↑/↓", "Enter", "q", "n", "v", "e", "d", "f", "<C-r>", "?",
-			},
+			Title:        "Key Maps",
+			Items:        items,
+			Order:        order,
 			KeyHighlight: true,
 		},
 	}, width)
 }
 
-func listPageHelper(width int) string {
-	return style.HelperView([]style.HelperContent{
+func (l listPage) listPageHelper(width int) string {
+	content := []style.HelperContent{
 		{Key: "<", Action: "menu"},
 		{Key: "↑/↓", Action: "navigate"},
-		{Key: "Enter", Action: "select"},
 		{Key: "q", Action: "quit"},
 		{Key: "?", Action: "toggle helper"},
-	}, width, style.NormalView)
+	}
+
+	enterValue := ""
+	if l.recordType == data.RecordTypeSession && len(l.records) > 0 &&
+		!l.records[l.selected].(data.Session).EndsAt.Valid {
+		enterValue = "end session"
+	} else if l.recordType != data.RecordTypeSession {
+		enterValue = "select"
+	}
+
+	if enterValue != "" {
+		content = slices.Insert(content, 2, style.HelperContent{Key: "Enter", Action: enterValue})
+	}
+
+	return style.HelperView(content, width)
 }

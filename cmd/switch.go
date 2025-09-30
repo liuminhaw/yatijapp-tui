@@ -19,8 +19,8 @@ type (
 	}
 
 	switchToTargetsMsg       struct{}
-	switchToActionsMsg       struct{ info sourceInfo }
-	switchToSessionsMsg      struct{ actionUUID string }
+	switchToActionsMsg       struct{ parents data.RecordParents }
+	switchToSessionsMsg      struct{ parents data.RecordParents }
 	switchToMenuMsg          struct{}
 	switchToSigninMsg        struct{}
 	switchToSignupMsg        struct{}
@@ -37,13 +37,17 @@ type (
 		uuid string
 	}
 	switchToActionCreateMsg struct {
-		parentTitle string
-		parentUUID  string
+		parents data.RecordParents
 	}
 	switchToActionEditMsg struct {
 		record yatijappRecord
 	}
 	switchToTargetSelectorMsg struct{}
+
+	switchToSessionViewMsg struct{ uuid string }
+	showSessionCreateMsg   struct {
+		parents data.RecordParents
+	}
 )
 
 var (
@@ -64,13 +68,25 @@ func switchToPreviousCmd(model tea.Model) tea.Cmd {
 	}
 }
 
-func switchToRecordsCmd(recordType data.RecordType, srcUUID, srcTitle string) tea.Cmd {
+func switchToRecordsCmd(record yatijappRecord) tea.Cmd {
 	return func() tea.Msg {
-		switch recordType {
+		switch record.GetActualType() {
 		case data.RecordTypeTarget:
-			return switchToActionsMsg{info: sourceInfo{uuid: srcUUID, title: srcTitle}}
+			return switchToActionsMsg{
+				parents: data.RecordParents{
+					data.RecordTypeTarget: {UUID: record.GetUUID(), Title: record.GetTitle()},
+				},
+			}
 		case data.RecordTypeAction:
-			return switchToSessionsMsg{}
+			return switchToSessionsMsg{
+				parents: data.RecordParents{
+					data.RecordTypeTarget: {
+						UUID:  record.GetParentsUUID()[data.RecordTypeTarget],
+						Title: record.GetParentsTitle()[data.RecordTypeTarget],
+					},
+					data.RecordTypeAction: {UUID: record.GetUUID(), Title: record.GetTitle()},
+				},
+			}
 		}
 
 		panic("unsupported record type in switchToRecordsCmd")
@@ -84,19 +100,23 @@ func switchToViewCmd(recordType data.RecordType, uuid string) tea.Cmd {
 			return switchToTargetViewMsg{uuid: uuid}
 		case data.RecordTypeAction:
 			return switchToActionViewMsg{uuid: uuid}
+		case data.RecordTypeSession:
+			return switchToSessionViewMsg{uuid: uuid}
 		}
 
 		panic("unsupported record type in switchToViewCmd")
 	}
 }
 
-func switchToCreateCmd(recordType data.RecordType, parentUUID, parentTitle string) tea.Cmd {
+func switchToCreateCmd(recordType data.RecordType, parents data.RecordParents) tea.Cmd {
 	return func() tea.Msg {
 		switch recordType {
 		case data.RecordTypeTarget:
 			return switchToTargetCreateMsg{}
 		case data.RecordTypeAction:
-			return switchToActionCreateMsg{parentUUID: parentUUID, parentTitle: parentTitle}
+			return switchToActionCreateMsg{parents: parents}
+		case data.RecordTypeSession:
+			return showSessionCreateMsg{parents: parents}
 		}
 
 		panic("unsupported record type in switchToCreateCmd")

@@ -117,7 +117,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchToResetPasswordMsg:
 		m.active = newResetPasswordPage(m.cfg, cmdCreate, style.ViewSize{Width: m.width, Height: m.height}, m.active)
 	case switchToTargetsMsg:
-		m.active = newTargetListPage(m.cfg, style.ViewSize{Width: m.width, Height: m.height}, sourceInfo{}, m.active)
+		m.active = newTargetListPage(
+			m.cfg, style.ViewSize{Width: m.width, Height: m.height}, data.RecordParents{}, m.active,
+		)
 		return m, m.active.Init()
 	case switchToTargetViewMsg:
 		m.active = newTargetViewPage2(
@@ -157,8 +159,12 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchToActionCreateMsg:
 		m.cfg.logger.Info("Switching to action create page")
 		var record yatijappRecord
-		if msg != (switchToActionCreateMsg{}) {
-			record = data.Action{Status: "queued", TargetUUID: msg.parentUUID, TargetTitle: msg.parentTitle}
+		if !msg.parents.IsEmpty() {
+			record = data.Action{
+				Status:      "queued",
+				TargetUUID:  msg.parents.UUID(data.RecordTypeTarget),
+				TargetTitle: msg.parents.Title(data.RecordTypeTarget),
+			}
 		}
 
 		page, err := newActionConfigPage(
@@ -191,7 +197,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.active = newActionListPage(
 			m.cfg,
 			style.ViewSize{Width: m.width, Height: m.height},
-			msg.info,
+			msg.parents,
 			m.active,
 		)
 		return m, m.active.Init()
@@ -205,12 +211,28 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 		return m, m.active.Init()
 	case switchToSessionsMsg:
-		// m.active = newTargetSelectorPage(m.cfg, style.ViewSize{Width: m.width, Height: m.height}, m.active)
-		// return m, m.active.Init()
+		m.active = newSessionListPage(
+			m.cfg,
+			style.ViewSize{Width: m.width, Height: m.height},
+			msg.parents,
+			m.active,
+		)
+		return m, m.active.Init()
+	case switchToSessionViewMsg:
+		m.active = newSessionViewPage(
+			m.cfg,
+			msg.uuid,
+			style.ViewSize{Width: m.width, Height: m.height},
+			style.ViewSize{Width: viewWidth, Height: 20},
+			m.active, // Previous model for navigation
+		)
+		return m, m.active.Init()
 	case switchToTargetSelectorMsg:
 		m.active = newTargetSelectorPage(m.cfg, style.ViewSize{Width: m.width, Height: m.height}, m.active)
 		return m, m.active.Init()
 	case selectorTargetSelectedMsg:
+		m.active = msg.model
+	case selectorActionSelectedMsg:
 		m.active = msg.model
 	case apiSuccessResponseMsg:
 		m.active = msg.redirect

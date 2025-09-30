@@ -33,7 +33,7 @@ type recordConfigHooks struct {
 		client *authclient.AuthClient,
 	) tea.Cmd
 	update func(
-		serverURL string,
+		serverURL, msg string,
 		body recordRequestData,
 		src, redirect tea.Model,
 		client *authclient.AuthClient,
@@ -42,9 +42,7 @@ type recordConfigHooks struct {
 
 type recordConfigPage struct {
 	cfg    config
-	mode   style.ViewMode
 	action cmdAction
-	// createWithSrc bool
 
 	uuid       string
 	record     yatijappRecord
@@ -55,7 +53,6 @@ type recordConfigPage struct {
 	fields       []Focusable
 	focused      int
 	focusedCache int
-	// hiddenFields map[string]struct{ val string }
 	hiddenFields map[string]string
 
 	width  int
@@ -64,7 +61,8 @@ type recordConfigPage struct {
 	err  error
 	prev tea.Model // Previous model for navigation
 
-	selector tea.Model
+	selectorFields map[data.RecordType]int
+	selector       tea.Model
 }
 
 func newRecordConfigPage(
@@ -79,6 +77,7 @@ func newRecordConfigPage(
 	focusables := []Focusable{}
 	// hiddens := make(map[string]struct{ val string })
 	hiddens := make(map[string]string)
+	selectorFields := make(map[data.RecordType]int)
 
 	name := textinput.New()
 	name.Prompt = ""
@@ -114,7 +113,10 @@ func newRecordConfigPage(
 	note := model.NewNoteModel()
 
 	// For actions, and sessions
-	parentTarget := components.NewText("", showSelectorMsg{})
+	parentTarget := components.NewText(
+		"",
+		showSelectorMsg{selection: data.RecordTypeTarget},
+	)
 	parentTarget.ValidateFunc = validator.ValidateRequired("target is required")
 
 	var uuid string
@@ -161,6 +163,7 @@ func newRecordConfigPage(
 		note,
 	)
 
+	var focusCache int
 	switch recordType {
 	case data.RecordTypeTarget:
 		focusables[0].Focus() // Focus name field
@@ -168,24 +171,27 @@ func newRecordConfigPage(
 		focusables = append(focusables, parentTarget)
 		if record == nil {
 			focusables[5].Focus() // Focus parent target field
+			focusCache = 5
 		} else {
 			focusables[0].Focus() // Focus name field
 		}
+		selectorFields[data.RecordTypeTarget] = 5
 	}
 
 	return recordConfigPage{
-		cfg:          cfg,
-		mode:         style.NormalView,
-		action:       recordAction,
-		record:       record,
-		recordType:   recordType,
-		uuid:         uuid,
-		title:        title,
-		fields:       focusables,
-		hiddenFields: hiddens,
-		width:        size.Width,
-		height:       size.Height,
-		prev:         prev,
+		cfg:            cfg,
+		action:         recordAction,
+		focusedCache:   focusCache,
+		record:         record,
+		recordType:     recordType,
+		uuid:           uuid,
+		title:          title,
+		fields:         focusables,
+		hiddenFields:   hiddens,
+		selectorFields: selectorFields,
+		width:          size.Width,
+		height:         size.Height,
+		prev:           prev,
 	}, nil
 }
 
@@ -215,7 +221,6 @@ func newActionConfigPage(
 	title string,
 	size style.ViewSize,
 	record yatijappRecord,
-	// hasSrc bool,
 	prev tea.Model,
 ) (recordConfigPage, error) {
 	page, err := newRecordConfigPage(
@@ -235,6 +240,58 @@ func newActionConfigPage(
 	return page, nil
 }
 
+func newSessionConfigPage(
+	cfg config,
+	title string,
+	size style.ViewSize,
+	record yatijappRecord,
+	prev tea.Model,
+) (recordConfigPage, error) {
+	focusables := []Focusable{}
+	hiddens := make(map[string]string)
+	selectorFields := make(map[data.RecordType]int)
+
+	note := model.NewNoteModel()
+
+	parentTarget := components.NewText("", showSelectorMsg{selection: data.RecordTypeTarget})
+	parentTarget.ValidateFunc = validator.ValidateRequired("target is required")
+
+	parentAction := components.NewText("", showSelectorMsg{selection: data.RecordTypeAction})
+	parentAction.ValidateFunc = validator.ValidateRequired("action is required")
+
+	focusables = append(focusables, parentTarget, parentAction, note)
+	focusables[0].Focus() // Focus parent target field
+
+	selectorFields[data.RecordTypeTarget] = 0
+	selectorFields[data.RecordTypeAction] = 1
+
+	if record != nil {
+		parentTarget.SetValue(record.GetParentsTitle()[data.RecordTypeTarget])
+		hiddens["parent_target_uuid"] = record.GetParentsUUID()[data.RecordTypeTarget]
+		parentAction.SetValue(record.GetParentsTitle()[data.RecordTypeAction])
+		hiddens["parent_action_uuid"] = record.GetParentsUUID()[data.RecordTypeAction]
+	}
+
+	return recordConfigPage{
+		cfg:            cfg,
+		action:         cmdCreate,
+		record:         record,
+		recordType:     data.RecordTypeSession,
+		title:          title,
+		fields:         focusables,
+		focused:        0,
+		hiddenFields:   hiddens,
+		selectorFields: selectorFields,
+		width:          size.Width,
+		height:         size.Height,
+		prev:           prev,
+		hooks: recordConfigHooks{
+			create: createSession,
+			update: updateSession,
+		},
+	}, nil
+}
+
 func (p recordConfigPage) Init() tea.Cmd {
 	return nil
 }
@@ -250,61 +307,62 @@ func (p recordConfigPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if p.selector != nil {
 			break
 		}
-		switch p.mode {
-		case style.NormalView:
-			switch msg.String() {
-			case "tab", "enter":
-				// Cycle through focusable fields
-				p.fields[p.focused].Validate()
-				p.fields[p.focused].Blur()
-				p.focused = (p.focused + 1) % len(p.fields)
-				p.focusedCache = p.focused
-				return p, p.fields[p.focused].Focus()
-			case "shift+tab":
-				p.fields[p.focused].Validate()
-				p.fields[p.focused].Blur()
-				p.focused = (p.focused - 1 + len(p.fields)) % len(p.fields)
-				p.focusedCache = p.focused
-				return p, p.fields[p.focused].Focus()
-			case "esc", "ctrl+[":
-				p.mode = style.HighlightView
-				p.fields[p.focused].Blur()
-				p.focused = -1
+		switch msg.String() {
+		case "tab", "enter":
+			// Cycle through focusable fields
+			p.fields[p.focused].Validate()
+			p.fields[p.focused].Blur()
+			p.focused = (p.focused + 1) % len(p.fields)
+			p.focusedCache = p.focused
+			return p, p.fields[p.focused].Focus()
+		case "shift+tab":
+			p.fields[p.focused].Validate()
+			p.fields[p.focused].Blur()
+			p.focused = (p.focused - 1 + len(p.fields)) % len(p.fields)
+			p.focusedCache = p.focused
+			return p, p.fields[p.focused].Focus()
+		case "esc", "ctrl+[":
+			return p, switchToPreviousCmd(p.prev)
+		case "ctrl+s":
+			switch p.action {
+			case cmdCreate:
+				return p, p.create()
+			case cmdUpdate:
+				p.cfg.logger.Info("updating record", slog.String("uuid", p.uuid))
+				return p, p.update()
 			}
-		case style.HighlightView:
-			switch msg.String() {
-			case "ctrl+c", "q":
-				return p, tea.Quit
-			case "<":
-				return p, switchToPreviousCmd(p.prev)
-			case "ctrl+s":
-				switch p.action {
-				case cmdCreate:
-					return p, p.create()
-				case cmdUpdate:
-					p.cfg.logger.Info("updating record", slog.String("uuid", p.uuid))
-					return p, p.update()
-				}
-			case "e":
-				p.mode = style.NormalView
-				p.focused = p.focusedCache
-				p.fields[p.focused].Focus()
-				return p, nil
-			}
+		case "ctrl+c":
+			return p, tea.Quit
 		}
 	case showSelectorMsg:
-		p.selector = newTargetSelectorPage(p.cfg, style.ViewSize{Width: p.width, Height: p.height}, p)
+		switch msg.selection {
+		case data.RecordTypeTarget:
+			p.selector = newTargetSelectorPage(p.cfg, style.ViewSize{Width: p.width, Height: p.height}, p)
+		case data.RecordTypeAction:
+			targetUUID := p.hiddenFields["parent_target_uuid"]
+			p.selector = newActionSelectorPage(
+				p.cfg, style.ViewSize{Width: p.width, Height: p.height}, targetUUID, p,
+			)
+		}
 		cmd := p.selector.Init()
 		cmds = append(cmds, cmd)
 	case selectorTargetSelectedMsg:
 		p.selector = nil
-		if len(p.fields) < 6 {
-			panic("action config page missing target field")
+		if p.fields[p.focusedCache].Value() != msg.title {
+			p.fields[p.focusedCache].SetValue(msg.title)
+			p.hiddenFields["parent_target_title"] = msg.title
+			p.hiddenFields["parent_target_uuid"] = msg.uuid
+			if idx, ok := p.selectorFields[data.RecordTypeAction]; ok {
+				p.fields[idx].SetValue("")
+				delete(p.hiddenFields, "parent_action_title")
+				delete(p.hiddenFields, "parent_action_uuid")
+			}
 		}
-		p.fields[5].SetValue(msg.title)
-		// p.hiddenFields["parent_target_uuid"] = struct{ val string }{val: msg.uuid}
-		p.hiddenFields["parent_target_title"] = msg.title
-		p.hiddenFields["parent_target_uuid"] = msg.uuid
+	case selectorActionSelectedMsg:
+		p.selector = nil
+		p.fields[p.focusedCache].SetValue(msg.title)
+		p.hiddenFields["parent_action_title"] = msg.title
+		p.hiddenFields["parent_action_uuid"] = msg.uuid
 	case data.UnauthorizedApiDataErr:
 		p.cfg.logger.Error(
 			msg.Error(),
@@ -348,30 +406,25 @@ func (p recordConfigPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p recordConfigPage) View() string {
+	if p.recordType == data.RecordTypeSession {
+		return p.sessionCreateView()
+	}
+
+	return p.tarActConfigView()
+}
+
+func (p recordConfigPage) tarActConfigView() string {
 	name := p.fields[0]
 	due := p.fields[1]
 	description := p.fields[2]
 	status := p.fields[3]
-	note := p.fields[4]
-	targetSourcePrompt, targetSource := p.parentTargetField()
+	noteField := p.noteField(4)
+	var targetField string
+	if p.recordType == data.RecordTypeAction {
+		targetField = p.parentField(data.RecordTypeTarget, 5, false)
+	}
 
 	titleView := style.TitleBarView([]string{p.title}, viewWidth, false)
-
-	var notePrompt string
-	if note.Focused() {
-		notePrompt = fmt.Sprintf(
-			"%s %s\n%s\n",
-			style.FormFieldStyle.Prompt("Note", note.Focused()),
-			style.FormFieldStyle.Helper.Render("(Press 'e' to edit)"),
-			style.FormFieldStyle.Error.Render(note.Error()),
-		)
-	} else {
-		notePrompt = fmt.Sprintf(
-			"%s\n%s\n",
-			style.FormFieldStyle.Prompt("Note", note.Focused()),
-			style.FormFieldStyle.Error.Render(note.Error()),
-		)
-	}
 
 	var statusPrompt string
 	if status.Focused() {
@@ -425,51 +478,27 @@ func (p recordConfigPage) View() string {
 			),
 		),
 
-		lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0).Render(notePrompt),
+		noteField+"\n",
 	)
 
-	var targetConfig string
 	if p.recordType == data.RecordTypeAction {
-		var content string
-		if targetSource.View() == "" {
-			content = lipgloss.NewStyle().Foreground(colors.HelperTextDim).Render("target UUID")
-		} else {
-			content = style.FormFieldStyle.Content.Render(targetSource.View())
-		}
-
-		targetConfig = lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0).Render(
-			targetSourcePrompt + "\n" +
-				// style.FormFieldStyle.Content.Render(targetSource.View()) +
-				content + "\n" +
-				style.FormFieldStyle.Error.Render(targetSource.Error()),
-		)
-		configContent = lipgloss.JoinVertical(lipgloss.Left, targetConfig, configContent)
+		configContent = lipgloss.JoinVertical(lipgloss.Left, targetField, configContent)
 	}
 
-	var helperContent []style.HelperContent
-	switch p.mode {
-	case style.NormalView:
-		helperContent = []style.HelperContent{
-			{Key: "Esc", Action: "finish editing"},
-			{Key: "Tab/Shift+Tab", Action: "navigate"},
-		}
-	case style.HighlightView:
-		var saveAction string
-		if p.action == cmdCreate {
-			saveAction = "create"
-		} else {
-			saveAction = "save"
-		}
-
-		helperContent = []style.HelperContent{
-			{Key: "<", Action: "back"},
-			{Key: "e", Action: "edit mode"},
-			{Key: "<C-s>", Action: saveAction},
-			{Key: "q", Action: "quit"},
-		}
+	var saveAction string
+	if p.action == cmdCreate {
+		saveAction = "create"
+	} else {
+		saveAction = "save"
+	}
+	helperContent := []style.HelperContent{
+		{Key: "Esc", Action: "back"},
+		{Key: "Tab/Shift+Tab", Action: "navigate"},
+		{Key: "<C-s>", Action: saveAction},
+		{Key: "<C-c>", Action: "quit"},
 	}
 
-	helperView := style.HelperView(helperContent, viewWidth, p.mode)
+	helperView := style.HelperView(helperContent, viewWidth)
 
 	msgView := style.ErrorView(style.ViewSize{Width: viewWidth, Height: 1}, p.err, nil)
 
@@ -490,11 +519,70 @@ func (p recordConfigPage) View() string {
 	return style.ContainerStyle(p.width, container, 5).Render(container)
 }
 
+func (p recordConfigPage) sessionCreateView() string {
+	title := lipgloss.NewStyle().
+		Width(60).
+		Margin(0, 2).
+		AlignHorizontal(lipgloss.Center).
+		Foreground(colors.Secondary).
+		Bold(true).
+		Render("Start new session")
+
+	fieldStyle := lipgloss.NewStyle().Width(60).Margin(1, 3, 0)
+	targetField := p.parentField(data.RecordTypeTarget, 0, true, fieldStyle)
+	actionField := p.parentField(data.RecordTypeAction, 1, true, fieldStyle)
+	noteField := p.noteField(2, fieldStyle)
+
+	helper := lipgloss.NewStyle().
+		Width(60).
+		Margin(1, 3, 0).
+		AlignHorizontal(lipgloss.Center).
+		Render(lipgloss.StyleRanges(
+			"Esc back    Tab/Shift+Tab navigate    <C-s> start\n",
+			lipgloss.Range{Start: 0, End: 3, Style: style.Document.Primary},
+			lipgloss.Range{Start: 4, End: 8, Style: style.Document.Normal},
+			lipgloss.Range{Start: 12, End: 25, Style: style.Document.Primary},
+			lipgloss.Range{Start: 26, End: 34, Style: style.Document.Normal},
+			lipgloss.Range{Start: 38, End: 43, Style: style.Document.Primary},
+			lipgloss.Range{Start: 44, End: 49, Style: style.Document.Normal},
+		))
+
+	msgView := style.ErrorView(style.ViewSize{Width: 66, Height: 1}, p.err, nil)
+
+	form := lipgloss.JoinVertical(
+		lipgloss.Left, title, targetField, actionField, noteField, msgView, helper,
+	)
+
+	return lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(colors.Text).
+		Render(form)
+}
+
 func (p recordConfigPage) validationError() error {
 	return fieldsValidation(p.fields, "input validation failed")
 }
 
 func (p recordConfigPage) create() tea.Cmd {
+	var d recordRequestData
+	var cmd tea.Cmd
+	switch p.recordType {
+	case data.RecordTypeTarget, data.RecordTypeAction:
+		d, cmd = p.tarActCreate()
+	case data.RecordTypeSession:
+		d, cmd = p.sessionCreate()
+	default:
+		panic("create record with unknown type: " + string(p.recordType))
+	}
+
+	if cmd != nil {
+		return cmd
+	}
+
+	return p.hooks.create(p.cfg.serverURL, d, p, p.prevPage(), p.cfg.authClient)
+}
+
+func (p recordConfigPage) tarActCreate() (recordRequestData, tea.Cmd) {
 	title := p.fields[0].Value()
 	due := p.fields[1].Value()
 	description := p.fields[2].Value()
@@ -502,7 +590,7 @@ func (p recordConfigPage) create() tea.Cmd {
 	note := p.fields[4].Value()
 
 	if err := p.validationError(); err != nil {
-		return validationErrorCmd(err)
+		return recordRequestData{}, validationErrorCmd(err)
 	}
 
 	d := recordRequestData{
@@ -513,10 +601,36 @@ func (p recordConfigPage) create() tea.Cmd {
 		dueDate:     due,
 	}
 	if p.recordType == data.RecordTypeAction {
-		d.targetUUID = p.hiddenFields["parent_target_uuid"]
+		targetUUID := p.hiddenFields["parent_target_uuid"]
+		d.targetUUID = targetUUID
 	}
 
-	return p.hooks.create(p.cfg.serverURL, d, p, p.prevPage(), p.cfg.authClient)
+	return d, nil
+}
+
+func (p recordConfigPage) sessionCreate() (recordRequestData, tea.Cmd) {
+	targetUUID := p.hiddenFields["parent_target_uuid"]
+	actionUUID := p.hiddenFields["parent_action_uuid"]
+	note := p.fields[2].Value()
+
+	if err := p.validationError(); err != nil {
+		return recordRequestData{}, validationErrorCmd(err)
+	}
+
+	if targetUUID == "" {
+		return recordRequestData{}, validationErrorCmd(errors.New("target is required"))
+	}
+	if actionUUID == "" {
+		return recordRequestData{}, validationErrorCmd(errors.New("action is required"))
+	}
+
+	d := recordRequestData{
+		targetUUID: targetUUID,
+		actionUUID: actionUUID,
+		note:       note,
+	}
+
+	return d, nil
 }
 
 func (p recordConfigPage) update() tea.Cmd {
@@ -542,33 +656,117 @@ func (p recordConfigPage) update() tea.Cmd {
 		d.targetUUID = p.hiddenFields["parent_target_uuid"]
 	}
 
-	return p.hooks.update(p.cfg.serverURL, d, p, p.prevPage(), p.cfg.authClient)
+	return p.hooks.update(p.cfg.serverURL, "", d, p, p.prevPage(), p.cfg.authClient)
 }
 
-func (p recordConfigPage) parentTargetField() (string, Focusable) {
-	if p.recordType != data.RecordTypeAction {
-		return "", nil
+func (p recordConfigPage) noteField(fieldIndex int, styling ...lipgloss.Style) string {
+	if len(p.fields) <= fieldIndex {
+		return ""
 	}
 
-	target := p.fields[5]
+	note := p.fields[fieldIndex]
+	var notePrompt string
+	if note.Focused() {
+		notePrompt = fmt.Sprintf(
+			"%s %s\n%s",
+			style.FormFieldStyle.Prompt("Note", note.Focused()),
+			style.FormFieldStyle.Helper.Render("(Press 'e' to edit)"),
+			style.FormFieldStyle.Error.Render(note.Error()),
+		)
+	} else {
+		notePrompt = fmt.Sprintf(
+			"%s\n%s",
+			style.FormFieldStyle.Prompt("Note", note.Focused()),
+			style.FormFieldStyle.Error.Render(note.Error()),
+		)
+	}
 
-	var targetPrompt string
-	if target.Focused() {
-		targetPrompt = style.FormFieldStyle.Prompt("Target Source", target.Focused()) +
+	applyStyling := lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0)
+	for _, s := range styling {
+		applyStyling = s.Inherit(applyStyling)
+	}
+
+	return applyStyling.Render(notePrompt)
+}
+
+func (p recordConfigPage) parentField(
+	parentType data.RecordType,
+	index int,
+	compacted bool,
+	styling ...lipgloss.Style,
+) string {
+	if len(p.fields) <= index {
+		return ""
+	}
+
+	focusable := p.fields[index]
+	placeholder := string(parentType)
+
+	var prompt string
+	if focusable.Focused() {
+		prompt = style.FormFieldStyle.Prompt(placeholder+" Source", true) +
 			" " + style.FormFieldStyle.Helper.Render("(Press 'e' to select)")
 	} else {
-		targetPrompt = style.FormFieldStyle.Prompt("Target Source", target.Focused())
+		prompt = style.FormFieldStyle.Prompt(placeholder+" Source", false)
 	}
 
-	return targetPrompt, target
+	var input string
+	if focusable.View() == "" {
+		input = lipgloss.NewStyle().Foreground(colors.HelperTextDim).Render(placeholder + " name")
+	} else {
+		input = style.FormFieldStyle.Content.Render(focusable.View())
+	}
+
+	applyStyling := lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0)
+
+	for _, s := range styling {
+		applyStyling = s.Inherit(applyStyling)
+	}
+
+	if compacted {
+		return applyStyling.Render(
+			prompt + " " + style.FormFieldStyle.Error.Render(focusable.Error()) +
+				"\n" + input,
+		)
+	} else {
+		return applyStyling.Render(
+			prompt + "\n" + input + "\n" + style.FormFieldStyle.Error.Render(focusable.Error()),
+		)
+	}
 }
 
 func (p recordConfigPage) prevPage() tea.Model {
 	if v, ok := p.prev.(listPage); ok {
-		if v.src.uuid != "" && v.src.uuid != p.hiddenFields["parent_target_uuid"] {
-			v.src.uuid = p.hiddenFields["parent_target_uuid"]
-			v.src.title = p.hiddenFields["parent_target_title"]
-			return v
+		parentType := v.recordType.GetParentType()
+		if parentType == "" {
+			return p.prev
+		}
+
+		switch v.recordType {
+		case data.RecordTypeAction:
+			targetUUID := v.src.UUID(data.RecordTypeTarget)
+			if targetUUID != "" && targetUUID != p.hiddenFields["parent_target_uuid"] {
+				v.src[data.RecordTypeTarget] = data.RecordParent{
+					UUID:  p.hiddenFields["parent_target_uuid"],
+					Title: p.hiddenFields["parent_target_title"],
+				}
+			}
+		case data.RecordTypeSession:
+			targetUUID := v.src.UUID(data.RecordTypeTarget)
+			if targetUUID != "" && targetUUID != p.hiddenFields["parent_target_uuid"] {
+				v.src[data.RecordTypeTarget] = data.RecordParent{
+					UUID:  p.hiddenFields["parent_target_uuid"],
+					Title: p.hiddenFields["parent_target_title"],
+				}
+			}
+
+			actionUUID := v.src.UUID(data.RecordTypeAction)
+			if actionUUID != "" && actionUUID != p.hiddenFields["parent_action_uuid"] {
+				v.src[data.RecordTypeAction] = data.RecordParent{
+					UUID:  p.hiddenFields["parent_action_uuid"],
+					Title: p.hiddenFields["parent_action_title"],
+				}
+			}
 		}
 	}
 

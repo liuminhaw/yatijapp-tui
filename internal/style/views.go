@@ -6,16 +6,12 @@ import (
 
 	"github.com/charmbracelet/bubbles/paginator"
 	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/liuminhaw/yatijapp-tui/colors"
 )
 
 type ViewMode int
-
-const (
-	NormalView ViewMode = iota
-	HighlightView
-)
 
 type ViewSize struct {
 	Width  int
@@ -38,8 +34,8 @@ func TitleBarView(contents []string, width int, msg bool) string {
 			title += Document.NormalDim.Render(" - " + contents[0])
 		} else {
 			content := strings.Join(contents[:len(contents)-1], " - ")
-			title += Document.Normal.Render(" - " + content)
-			title += Document.NormalDim.Render(" - " + contents[len(contents)-1])
+			title += Document.NormalDim.Render(" - " + content)
+			title += Document.Normal.Render(" - " + contents[len(contents)-1])
 		}
 	}
 
@@ -48,7 +44,7 @@ func TitleBarView(contents []string, width int, msg bool) string {
 
 func LoadingView(s *spinner.Model, title string, sizing ViewSize) string {
 	titleBar := TitleBarView([]string{title}, sizing.Width, false)
-	helper := HelperView([]HelperContent{{Key: "<", Action: "back"}}, sizing.Width, NormalView)
+	helper := HelperView([]HelperContent{{Key: "<", Action: "back"}}, sizing.Width)
 
 	msg := Document.NormalDim.Bold(true).Render("loading...")
 	s.Style = Document.Highlight
@@ -70,14 +66,14 @@ type HelperContent struct {
 	Action string
 }
 
-func HelperView(contents []HelperContent, width int, mode ViewMode) string {
+func HelperView(contents []HelperContent, width int) string {
 	var b strings.Builder
 	for i, content := range contents {
 		b.WriteString(
 			fmt.Sprintf(
 				"%s %s",
-				HelperStyle[mode].Key.Render(content.Key),
-				HelperStyle[mode].Action.Render(content.Action),
+				HelperStyle.Key.Render(content.Key),
+				HelperStyle.Action.Render(content.Action),
 			),
 		)
 		if i < len(contents)-1 {
@@ -153,7 +149,7 @@ func ErrorView(sizing ViewSize, err error, helpMsg []HelperContent) string {
 		Render(msg)
 
 	if helpMsg != nil {
-		helper := HelperView(helpMsg, sizing.Width, NormalView)
+		helper := HelperView(helpMsg, sizing.Width)
 		return lipgloss.JoinVertical(
 			lipgloss.Center,
 			errMsg,
@@ -188,6 +184,7 @@ type ConfirmCheckItem struct {
 type ConfirmCheck struct {
 	Prompt  string
 	Warning string
+	Cmd     tea.Cmd
 }
 
 func (c ConfirmCheck) View(title string, width int) string {

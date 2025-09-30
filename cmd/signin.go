@@ -136,7 +136,7 @@ func (m signinPage) View() string {
 		{Key: "tab", Action: "navigate"},
 		{Key: "<C-c>", Action: "quit"},
 	}
-	helperView := style.HelperView(helperContent, viewWidth, style.NormalView)
+	helperView := style.HelperView(helperContent, viewWidth)
 
 	msgView := style.ErrorView(style.ViewSize{Width: viewWidth, Height: 1}, m.err, nil)
 

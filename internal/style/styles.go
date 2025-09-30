@@ -45,22 +45,12 @@ var InputStyle = struct {
 	Helper:   lipgloss.NewStyle().Foreground(colors.HelperText).Italic(true),
 }
 
-var HelperStyle = map[ViewMode]struct {
+var HelperStyle = struct {
 	Key    lipgloss.Style
 	Action lipgloss.Style
 }{
-	NormalView: {
-		Key:    lipgloss.NewStyle().Foreground(colors.HelperText).Italic(true).Bold(true),
-		Action: lipgloss.NewStyle().Foreground(colors.HelperTextDim).Italic(true),
-	},
-	HighlightView: {
-		Key: lipgloss.NewStyle().
-			Foreground(colors.MainText).
-			Bold(true),
-		Action: lipgloss.NewStyle().
-			Foreground(colors.DocumentTextBright).
-			Italic(true),
-	},
+	Key:    lipgloss.NewStyle().Foreground(colors.HelperText).Italic(true).Bold(true),
+	Action: lipgloss.NewStyle().Foreground(colors.HelperTextDim).Italic(true),
 }
 
 var ChoicesStyle = map[string]struct {

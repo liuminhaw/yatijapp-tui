@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,6 +107,25 @@ func loadAllActions(serverURL, srcUUID, msg string, client *authclient.AuthClien
 	}
 }
 
+func loadAllSessions(serverURL, srcUUID, msg string, client *authclient.AuthClient) tea.Cmd {
+	return func() tea.Msg {
+		sessions, err := data.ListSessions(serverURL, client, srcUUID)
+		if err != nil {
+			return err
+		}
+
+		records := make([]yatijappRecord, len(sessions))
+		for i, session := range sessions {
+			records[i] = session
+		}
+
+		return allRecordsLoadedMsg{
+			records: records,
+			msg:     msg,
+		}
+	}
+}
+
 func loadTarget(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Cmd {
 	return func() tea.Msg {
 		target, err := data.GetTarget(serverURL, uuid, client)
@@ -134,6 +154,20 @@ func loadAction(serverURL, uuid, msg string, client *authclient.AuthClient) tea.
 	}
 }
 
+func loadSession(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Cmd {
+	return func() tea.Msg {
+		session, err := data.GetSession(serverURL, uuid, client)
+		if err != nil {
+			return err
+		}
+
+		return getRecordLoadedMsg{
+			record: session,
+			msg:    msg,
+		}
+	}
+}
+
 func deleteTarget(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd {
 	return func() tea.Msg {
 		if err := data.DeleteTarget(serverURL, uuid, client); err != nil {
@@ -154,6 +188,16 @@ func deleteAction(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd
 	}
 }
 
+func deleteSession(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd {
+	return func() tea.Msg {
+		if err := data.DeleteSession(serverURL, uuid, client); err != nil {
+			return err
+		}
+
+		return recordDeletedMsg("Session deleted successfully.")
+	}
+}
+
 type recordRequestData struct {
 	// Common fields
 	uuid        string
@@ -164,6 +208,10 @@ type recordRequestData struct {
 	dueDate     string
 	// Action specific
 	targetUUID string
+	// Session specific
+	startsAt   time.Time
+	endsAt     sql.NullTime
+	actionUUID string
 }
 
 func (d recordRequestData) targetRequestBody() data.TargetRequestBody {
@@ -201,6 +249,24 @@ func (d recordRequestData) actionRequestBody() data.ActionRequestBody {
 	return body
 }
 
+func (d recordRequestData) sessionRequestBody() data.SessionRequestBody {
+	body := data.SessionRequestBody{
+		EndsAt: &d.endsAt,
+	}
+
+	if d.actionUUID != "" {
+		body.ActionUUID = &d.actionUUID
+	}
+	if !d.startsAt.IsZero() {
+		body.StartsAt = &d.startsAt
+	}
+	if d.note != "" {
+		body.Notes = &d.note
+	}
+
+	return body
+}
+
 func createTarget(
 	serverURL string,
 	d recordRequestData,
@@ -222,11 +288,16 @@ func createTarget(
 }
 
 func updateTarget(
-	serverURL string,
+	serverURL, msg string,
 	d recordRequestData,
 	src, redirect tea.Model,
 	client *authclient.AuthClient,
 ) tea.Cmd {
+	responseMsg := "Target updated successfully"
+	if msg != "" {
+		responseMsg = msg
+	}
+
 	return func() tea.Msg {
 		request := d.targetRequestBody()
 		if err := request.Update(serverURL, d.uuid, client); err != nil {
@@ -234,7 +305,7 @@ func updateTarget(
 		}
 
 		return apiSuccessResponseMsg{
-			msg:      "Target updated successfully",
+			msg:      responseMsg,
 			source:   src,
 			redirect: redirect,
 		}
@@ -262,11 +333,16 @@ func createAction(
 }
 
 func updateAction(
-	serverURL string,
+	serverURL, msg string,
 	d recordRequestData,
 	src, redirect tea.Model,
 	client *authclient.AuthClient,
 ) tea.Cmd {
+	responseMsg := "Action updated successfully"
+	if msg != "" {
+		responseMsg = msg
+	}
+
 	return func() tea.Msg {
 		request := d.actionRequestBody()
 		if err := request.Update(serverURL, d.uuid, client); err != nil {
@@ -274,7 +350,52 @@ func updateAction(
 		}
 
 		return apiSuccessResponseMsg{
-			msg:      "Action updated successfully",
+			msg:      responseMsg,
+			source:   src,
+			redirect: redirect,
+		}
+	}
+}
+
+func createSession(
+	serverURL string,
+	d recordRequestData,
+	src, redirect tea.Model,
+	client *authclient.AuthClient,
+) tea.Cmd {
+	return func() tea.Msg {
+		request := d.sessionRequestBody()
+		if err := request.Create(serverURL, client); err != nil {
+			return err
+		}
+
+		return apiSuccessResponseMsg{
+			msg:      "New session started",
+			source:   src,
+			redirect: redirect,
+		}
+	}
+}
+
+func updateSession(
+	serverURL, msg string,
+	d recordRequestData,
+	src, redirect tea.Model,
+	client *authclient.AuthClient,
+) tea.Cmd {
+	responseMsg := "Session updated successfully"
+	if msg != "" {
+		responseMsg = msg
+	}
+
+	return func() tea.Msg {
+		request := d.sessionRequestBody()
+		if err := request.Update(serverURL, d.uuid, client); err != nil {
+			return err
+		}
+
+		return apiSuccessResponseMsg{
+			msg:      responseMsg,
 			source:   src,
 			redirect: redirect,
 		}

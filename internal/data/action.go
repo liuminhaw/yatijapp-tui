@@ -34,11 +34,7 @@ func ListActions(
 		}
 	}
 
-	req, err := http.NewRequest(
-		http.MethodGet,
-		path,
-		nil,
-	)
+	req, err := http.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return []Action{}, UnauthorizedApiDataErr{
 			Err: err,

@@ -215,7 +215,7 @@ func (m menuPage) View() string {
 	} else if len(m.view) > 1 && m.viewPage == 1 {
 		helper = append(helper, style.HelperContent{Key: "<", Action: "back"})
 	}
-	helperView := style.HelperView(helper, lipgloss.Width(mainView), style.NormalView)
+	helperView := style.HelperView(helper, lipgloss.Width(mainView))
 
 	container := lipgloss.JoinVertical(
 		lipgloss.Center,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -90,6 +91,19 @@ func newActionViewPage(
 	page.recordType = data.RecordTypeAction
 	page.hooks.load = loadAction
 	page.hooks.delete = deleteAction
+	return page
+}
+
+func newSessionViewPage(
+	cfg config,
+	uuid string,
+	termSize, vpSize style.ViewSize,
+	prev tea.Model,
+) viewPage {
+	page := newViewPage(cfg, uuid, termSize, vpSize, prev)
+	page.recordType = data.RecordTypeSession
+	page.hooks.load = loadSession
+	page.hooks.delete = deleteSession
 	return page
 }
 
@@ -228,7 +242,7 @@ func (v viewPage) View() string {
 		{Key: "e", Action: "edit"},
 		{Key: "d", Action: "delete"},
 		{Key: "q", Action: "quit"},
-	}, viewWidth, style.NormalView)
+	}, viewWidth)
 
 	container := lipgloss.JoinVertical(
 		lipgloss.Center,
@@ -246,10 +260,17 @@ func (v viewPage) viewportContent() string {
 	content.WriteString("# " + v.record.GetTitle() + "\n")
 	content.WriteString(v.record.GetDescription() + "\n\n")
 
-	if v.recordType == data.RecordTypeAction {
+	switch v.recordType {
+	case data.RecordTypeAction:
 		content.WriteString("## Upstream\n")
 		content.WriteString(
 			"- **Target:** " + v.record.GetParentsTitle()[data.RecordTypeTarget] + "\n\n",
+		)
+	case data.RecordTypeSession:
+		content.WriteString("## Upstream\n")
+		content.WriteString(
+			"- **Target:** " + v.record.GetParentsTitle()[data.RecordTypeTarget] + "\n" +
+				"- **Action:** " + v.record.GetParentsTitle()[data.RecordTypeAction] + "\n\n",
 		)
 	}
 
@@ -258,20 +279,42 @@ func (v viewPage) viewportContent() string {
 
 	due, valid := v.record.GetDueDate()
 	content.WriteString("## Timestamp\n")
-	if valid {
-		content.WriteString("- **Due Date:**: " + due.Format("2006-01-02") + "\n")
-	} else {
-		content.WriteString("- **Due Date:** --\n")
+	if v.recordType != data.RecordTypeSession {
+		if valid {
+			content.WriteString("- **Due Date:**: " + due.Format("2006-01-02") + "\n")
+		} else {
+			content.WriteString("- **Due Date:** --\n")
+		}
+		content.WriteString(
+			"- **Created At:** " + v.record.GetCreatedAt().Format("2006-01-02 15:04:05") + "\n",
+		)
+		content.WriteString(
+			"- **Updated At:** " + v.record.GetUpdatedAt().Format("2006-01-02 15:04:05") + "\n\n",
+		)
+		content.WriteString(
+			"- **Last Active:** " + v.record.GetUpdatedAt().Format("2006-01-02 15:04:05") + "\n\n",
+		)
 	}
-	content.WriteString(
-		"- **Created At:** " + v.record.GetCreatedAt().Format("2006-01-02 15:04:05") + "\n",
-	)
-	content.WriteString(
-		"- **Updated At:** " + v.record.GetUpdatedAt().Format("2006-01-02 15:04:05") + "\n\n",
-	)
-	content.WriteString(
-		"- **Last Active:** " + v.record.GetUpdatedAt().Format("2006-01-02 15:04:05") + "\n\n",
-	)
+
+	if v.recordType == data.RecordTypeSession {
+		session := v.record.(data.Session)
+		content.WriteString(
+			"- **Starts At:**  " + session.StartsAt.Format("2006-01-02 15:04:05") + "\n",
+		)
+		if session.EndsAt.Valid {
+			content.WriteString(
+				"- **Ends At:**    " + session.EndsAt.Time.Format("2006-01-02 15:04:05") + "\n",
+			)
+			content.WriteString(
+				"- **Duration:**   " + session.EndsAt.Time.Sub(session.StartsAt).
+					Truncate(time.Second).
+					String() +
+					"\n\n",
+			)
+		} else {
+			content.WriteString("- **Ends At:**    --\n\n")
+		}
+	}
 
 	content.WriteString("## Notes\n---\n")
 	note := v.record.GetNote()
@@ -312,18 +355,30 @@ func (v *viewPage) clearMsg() {
 
 func (p viewPage) prevPage() tea.Model {
 	if v, ok := p.prev.(listPage); ok {
-		parentType, exists := p.recordType.GetParentType()
-		if !exists {
+		parentType := p.recordType.GetParentType()
+		if parentType == "" {
 			return p.prev
 		}
-		if v.src.uuid != "" && v.src.uuid != p.record.GetParentsUUID()[parentType] {
+
+		parentUUID := v.src.UUID(parentType)
+		if parentUUID != "" && parentUUID != p.record.GetParentsUUID()[parentType] {
 			p.cfg.logger.Info(
-				fmt.Sprintf("before parent uuid: %s, parent title: %s", v.src.uuid, v.src.title),
+				fmt.Sprintf(
+					"before parent uuid: %s, parent title: %s",
+					parentUUID,
+					v.src.Title(parentType),
+				),
 			)
-			v.src.uuid = p.record.GetParentsUUID()[parentType]
-			v.src.title = p.record.GetParentsTitle()[parentType]
+			v.src[parentType] = data.RecordParent{
+				UUID:  p.record.GetParentsUUID()[parentType],
+				Title: p.record.GetParentsTitle()[parentType],
+			}
 			p.cfg.logger.Info(
-				fmt.Sprintf("after parent uuid: %s, parent title: %s", v.src.uuid, v.src.title),
+				fmt.Sprintf(
+					"after parent uuid: %s, parent title: %s",
+					v.src.UUID(parentType),
+					v.src.Title(parentType),
+				),
 			)
 			return v
 		}

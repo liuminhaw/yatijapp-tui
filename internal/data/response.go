@@ -63,24 +63,43 @@ type Metadata struct {
 	TotalRecords int `json:"total_records,omitzero"`
 }
 
-type RecordType string
-
-func (rt RecordType) GetParentType() (RecordType, bool) {
-	switch rt {
-	case RecordTypeAction:
-		return RecordTypeTarget, true
-	case RecordTypeSession:
-		return RecordTypeAction, true
-	default:
-		return "", false
-	}
-}
-
 const (
 	RecordTypeTarget  RecordType = "Target"
 	RecordTypeAction  RecordType = "Action"
 	RecordTypeSession RecordType = "Session"
 )
+
+type RecordType string
+
+func (rt RecordType) GetParentType() RecordType {
+	switch rt {
+	case RecordTypeAction:
+		return RecordTypeTarget
+	case RecordTypeSession:
+		return RecordTypeAction
+	default:
+		return ""
+	}
+}
+
+type RecordParent struct {
+	UUID  string
+	Title string
+}
+
+type RecordParents map[RecordType]RecordParent
+
+func (rp RecordParents) IsEmpty() bool {
+	return len(rp) == 0
+}
+
+func (rp RecordParents) UUID(recordType RecordType) string {
+	return rp[recordType].UUID
+}
+
+func (rp RecordParents) Title(recordType RecordType) string {
+	return rp[recordType].Title
+}
 
 type Target struct {
 	UUID         string       `json:"uuid"`
@@ -170,7 +189,7 @@ func (a Action) ListItemView(hasSrc, chosen bool, width int) string {
 		status: a.Status,
 	}
 	if hasSrc {
-		d.parent = a.TargetTitle
+		d.parent = map[RecordType]string{RecordTypeTarget: a.TargetTitle}
 	}
 
 	return listPageItemView(d, chosen, width)
@@ -192,7 +211,7 @@ func (a Action) ListItemDetailView(hasSrc bool, width int) string {
 		childrenCount: a.SessionsCount,
 	}
 	if hasSrc {
-		d.parent = a.TargetTitle
+		d.parent = map[RecordType]string{RecordTypeTarget: a.TargetTitle}
 	}
 
 	return listPageItemDetail(d, width)
@@ -225,9 +244,95 @@ func (a Action) GetParentsTitle() map[RecordType]string {
 	}
 }
 
-func (a Action) GetChildrenCount() int64 { return 0 }
+func (a Action) GetChildrenCount() int64 { return a.SessionsCount }
 
 func (a Action) HasNote() bool { return a.HasNotes }
+
+type Session struct {
+	UUID        string       `json:"uuid"`
+	StartsAt    time.Time    `json:"starts_at"`
+	EndsAt      sql.NullTime `json:"ends_at"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	Notes       string       `json:"notes"`
+	Version     int32        `json:"version"`
+	ActionUUID  string       `json:"action_uuid"`
+	ActionTitle string       `json:"action_title"`
+	TargetUUID  string       `json:"target_uuid"`
+	TargetTitle string       `json:"target_title"`
+	HasNotes    bool         `json:"has_notes"`
+}
+
+func (s Session) ListItemView(hasSrc, chosen bool, width int) string {
+	d := listItemData{
+		title:  s.GetTitle(),
+		status: s.GetStatus(),
+	}
+	if hasSrc {
+		d.parent = map[RecordType]string{
+			RecordTypeTarget: s.TargetTitle,
+			RecordTypeAction: s.ActionTitle,
+		}
+	}
+
+	return listPageItemView(d, chosen, width)
+}
+
+func (s Session) ListItemDetailView(hasSrc bool, width int) string {
+	d := listItemData{
+		title:    s.GetTitle(),
+		status:   s.GetStatus(),
+		itemType: RecordTypeSession,
+		hasNotes: s.HasNotes,
+	}
+	if hasSrc {
+		d.parent = map[RecordType]string{
+			RecordTypeTarget: s.TargetTitle,
+			RecordTypeAction: s.ActionTitle,
+		}
+	}
+
+	return listPageItemDetail(d, width)
+}
+
+func (s Session) GetActualType() RecordType { return RecordTypeSession }
+func (s Session) GetUUID() string           { return s.UUID }
+func (s Session) GetTitle() string {
+	startStr := s.StartsAt.Local().Format("2006-01-02 15:04:05")
+	endStr := "--"
+	if s.EndsAt.Valid {
+		endStr = s.EndsAt.Time.Local().Format("2006-01-02 15:04:05")
+	}
+
+	return fmt.Sprintf("%s → %s", startStr, endStr)
+}
+func (s Session) GetDescription() string { return "" }
+func (s Session) GetStatus() string {
+	if s.EndsAt.Valid {
+		return "completed"
+	}
+	return "in progress"
+}
+func (s Session) GetNote() string               { return s.Notes }
+func (s Session) GetDueDate() (time.Time, bool) { return time.Time{}, false }
+func (s Session) GetCreatedAt() time.Time       { return s.CreatedAt }
+func (s Session) GetUpdatedAt() time.Time       { return s.UpdatedAt }
+func (s Session) GetLastActive() time.Time      { return s.UpdatedAt }
+func (s Session) GetParentsUUID() map[RecordType]string {
+	return map[RecordType]string{
+		RecordTypeAction: s.ActionUUID,
+		RecordTypeTarget: s.TargetUUID,
+	}
+}
+
+func (s Session) GetParentsTitle() map[RecordType]string {
+	return map[RecordType]string{
+		RecordTypeAction: s.ActionTitle,
+		RecordTypeTarget: s.TargetTitle,
+	}
+}
+func (s Session) GetChildrenCount() int64 { return 0 }
+func (s Session) HasNote() bool           { return s.HasNotes }
 
 type User struct {
 	UUID  string `json:"uuid"`
@@ -240,7 +345,7 @@ type listItemData struct {
 	description   string
 	status        string
 	due           *time.Time
-	parent        string
+	parent        map[RecordType]string
 	itemType      RecordType
 	hasNotes      bool
 	childrenCount int64
@@ -307,11 +412,13 @@ func listPageItemDetail(d listItemData, width int) string {
 		description = strings.TrimSpace(d.description)
 	}
 
-	builder.WriteString(
-		style.Document.Primary.Padding(0, 2).Render("Description:") + "\n" +
-			style.Document.Normal.Width(width).Padding(0, 2).Render(description) +
-			"\n",
-	)
+	if d.itemType != RecordTypeSession {
+		builder.WriteString(
+			style.Document.Primary.Padding(0, 2).Render("Description:") + "\n" +
+				style.Document.Normal.Width(width).Padding(0, 2).Render(description) +
+				"\n",
+		)
+	}
 
 	var childrenCountInfo string
 	switch d.itemType {
@@ -321,13 +428,19 @@ func listPageItemDetail(d listItemData, width int) string {
 		childrenCountInfo = "Sessions count: "
 	}
 
-	if d.parent != "" {
-		var parentInfo string
-		switch d.itemType {
-		case RecordTypeAction:
-			parentInfo = style.Document.Primary.Render("Target: ")
-		case RecordTypeSession:
-			parentInfo = style.Document.Primary.Render("Action: ")
+	if len(d.parent) != 0 {
+		var detail string
+		if d.itemType == RecordTypeAction || d.itemType == RecordTypeSession {
+			detail += lipgloss.NewStyle().Padding(0, 2).Render(
+				style.Document.Primary.Render("Target: ")+
+					style.Document.Normal.Render(d.parent[RecordTypeTarget]),
+			) + "\n"
+		}
+		if d.itemType == RecordTypeSession {
+			detail += lipgloss.NewStyle().Padding(0, 2).Render(
+				style.Document.Primary.Render("Action: ")+
+					style.Document.Normal.Render(d.parent[RecordTypeAction]),
+			) + "\n"
 		}
 
 		gap, remain, ok := style.CalculateGap(
@@ -340,10 +453,6 @@ func listPageItemDetail(d listItemData, width int) string {
 		if !ok {
 			gap = 1
 		}
-
-		detail := lipgloss.NewStyle().Padding(0, 2).Render(
-			parentInfo+style.Document.Normal.Render(d.parent),
-		) + "\n"
 
 		detail += lipgloss.NewStyle().Padding(0, 2).Render(
 			dueInfo + dueValue +

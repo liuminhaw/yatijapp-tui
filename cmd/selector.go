@@ -21,7 +21,8 @@ type selectorHooks struct {
 type selectorPage struct {
 	cfg config
 
-	selection recordsSelection
+	parentUUID string
+	selection  recordsSelection
 	// selection model.SelectorModel
 	// text      *components.TextComponent
 
@@ -39,34 +40,56 @@ type selectorPage struct {
 	prev tea.Model
 }
 
-func newSelectorPage(cfg config, termSize style.ViewSize, prev tea.Model) selectorPage {
+func newSelectorPage(
+	cfg config,
+	termSize style.ViewSize,
+	parentUUID string,
+	prev tea.Model,
+) selectorPage {
 	return selectorPage{
 		cfg: cfg,
-		// paginator: style.NewPaginator(10),
 		selection: recordsSelection{
 			p: style.NewPaginator(6),
 		},
-		// selection: model.NewSelectorModel([]data.YatijappRecord{}, 10, 70),
-		// text:      components.NewText(""),
-		width:   termSize.Width,
-		height:  termSize.Height,
-		spinner: spinner.New(spinner.WithSpinner(spinner.Line)),
-		loading: true,
-		prev:    prev,
+		parentUUID: parentUUID,
+		width:      termSize.Width,
+		height:     termSize.Height,
+		spinner:    spinner.New(spinner.WithSpinner(spinner.Line)),
+		loading:    true,
+		prev:       prev,
 	}
 }
 
 func newTargetSelectorPage(cfg config, termSize style.ViewSize, prev tea.Model) selectorPage {
-	page := newSelectorPage(cfg, termSize, prev)
+	page := newSelectorPage(cfg, termSize, "", prev)
 	page.recordType = data.RecordTypeTarget
-	page.hooks = selectorHooks{
-		loadAll: loadAllTargets,
-	}
+	page.hooks = selectorHooks{loadAll: loadAllTargets}
+	return page
+}
+
+func newActionSelectorPage(
+	cfg config,
+	termSize style.ViewSize,
+	targetUUID string,
+	prev tea.Model,
+) selectorPage {
+	page := newSelectorPage(cfg, termSize, targetUUID, prev)
+	page.recordType = data.RecordTypeAction
+	page.hooks = selectorHooks{loadAll: loadAllActions}
+
 	return page
 }
 
 func (p selectorPage) Init() tea.Cmd {
-	return tea.Batch(p.spinner.Tick, p.hooks.loadAll(p.cfg.serverURL, "", "", p.cfg.authClient))
+	var cmd tea.Cmd
+	if p.parentUUID == "" && p.recordType != data.RecordTypeTarget {
+		cmd = func() tea.Msg {
+			return allRecordsLoadedMsg{}
+		}
+	} else {
+		cmd = p.hooks.loadAll(p.cfg.serverURL, p.parentUUID, "", p.cfg.authClient)
+	}
+	return tea.Batch(p.spinner.Tick, cmd)
 }
 
 func (p selectorPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -188,7 +211,7 @@ func (p selectorPage) View() string {
 		lipgloss.Range{Start: 10, End: 16, Style: style.Document.Primary},
 		lipgloss.Range{Start: 16, End: 25, Style: style.Document.Normal},
 		lipgloss.Range{Start: 28, End: 34, Style: style.Document.Primary},
-		lipgloss.Range{Start: 35, End: 31, Style: style.Document.Normal},
+		lipgloss.Range{Start: 35, End: 41, Style: style.Document.Normal},
 	)
 
 	container := lipgloss.JoinVertical(

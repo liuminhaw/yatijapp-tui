@@ -27,8 +27,15 @@ type (
 		err error
 	}
 
-	showSelectorMsg           struct{}
+	showSelectorMsg struct {
+		selection data.RecordType
+	}
 	selectorTargetSelectedMsg struct {
+		model tea.Model
+		title string
+		uuid  string
+	}
+	selectorActionSelectedMsg struct {
 		model tea.Model
 		title string
 		uuid  string
@@ -56,11 +63,21 @@ func internalErrorCmd(msg string, err error) tea.Cmd {
 	}
 }
 
-func selectorSelectedCmd(model tea.Model, title, uuid string, recordType data.RecordType) tea.Cmd {
+func selectorSelectedCmd(
+	model tea.Model,
+	title, uuid string,
+	recordType data.RecordType,
+) tea.Cmd {
 	return func() tea.Msg {
 		switch recordType {
 		case data.RecordTypeTarget:
 			return selectorTargetSelectedMsg{
+				model: model,
+				title: title,
+				uuid:  uuid,
+			}
+		case data.RecordTypeAction:
+			return selectorActionSelectedMsg{
 				model: model,
 				title: title,
 				uuid:  uuid,

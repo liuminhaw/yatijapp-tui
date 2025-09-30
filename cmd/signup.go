@@ -205,7 +205,7 @@ func (m signupPage) signupView() string {
 		{Key: "enter", Action: "submit"},
 		{Key: "<C-c>", Action: "quit"},
 	}
-	helperView := style.HelperView(helperContent, viewWidth, style.NormalView)
+	helperView := style.HelperView(helperContent, viewWidth)
 	msgView := style.ErrorView(style.ViewSize{Width: viewWidth, Height: 1}, m.err, nil)
 
 	return lipgloss.JoinVertical(
@@ -244,7 +244,7 @@ func (m signupPage) activateView() string {
 		{Key: "enter", Action: "submit"},
 		{Key: "<C-c>", Action: "quit"},
 	}
-	helperView := style.HelperView(helperContent, viewWidth, style.NormalView)
+	helperView := style.HelperView(helperContent, viewWidth)
 
 	msgView := style.ErrorView(style.ViewSize{Width: viewWidth, Height: 1}, m.err, nil)
 
