@@ -428,8 +428,8 @@ func listPageItemDetail(d listItemData, width int) string {
 		childrenCountInfo = "Sessions count: "
 	}
 
+	var detail string
 	if len(d.parent) != 0 {
-		var detail string
 		if d.itemType == RecordTypeAction || d.itemType == RecordTypeSession {
 			detail += lipgloss.NewStyle().Padding(0, 2).Render(
 				style.Document.Primary.Render("Target: ")+
@@ -442,63 +442,41 @@ func listPageItemDetail(d listItemData, width int) string {
 					style.Document.Normal.Render(d.parent[RecordTypeAction]),
 			) + "\n"
 		}
-
-		gap, remain, ok := style.CalculateGap(
-			width-4,
-			dueInfo+dueValue,
-			statusInfo+statusValue,
-			notesInfo+notesValue,
-			fmt.Sprintf("%s: %d", childrenCountInfo, d.childrenCount),
-		)
-		if !ok {
-			gap = 1
-		}
-
-		detail += lipgloss.NewStyle().Padding(0, 2).Render(
-			dueInfo + dueValue +
-				strings.Repeat(" ", gap+remain) +
-				statusInfo + statusValue +
-				strings.Repeat(" ", gap) +
-				lipgloss.NewStyle().
-					Render(
-						style.Document.Primary.Render(childrenCountInfo)+
-							style.Document.Normal.Render(
-								fmt.Sprintf("%d", d.childrenCount),
-							),
-					) +
-				strings.Repeat(" ", gap) +
-				notesInfo + notesValue,
-		)
-		builder.WriteString(detail)
-	} else {
-		gap, remain, ok := style.CalculateGap(
-			width-4,
-			dueInfo+dueValue,
-			statusInfo+statusValue,
-			notesInfo+notesValue,
-			fmt.Sprintf("%s: %d", childrenCountInfo, d.childrenCount),
-		)
-		if !ok {
-			gap = 1
-		}
-
-		detail := lipgloss.NewStyle().Padding(0, 2).Render(
-			dueInfo + dueValue +
-				strings.Repeat(" ", gap+remain) +
-				statusInfo + statusValue +
-				strings.Repeat(" ", gap) +
-				lipgloss.NewStyle().
-					Render(
-						style.Document.Primary.Render(childrenCountInfo)+
-							style.Document.Normal.Render(
-								fmt.Sprintf("%d", d.childrenCount),
-							),
-					) +
-				strings.Repeat(" ", gap) +
-				notesInfo + notesValue,
-		)
-		builder.WriteString(detail)
 	}
+
+	fields := []string{
+		dueInfo + dueValue,
+		statusInfo + statusValue,
+		notesInfo + notesValue,
+	}
+	if d.itemType != RecordTypeSession {
+		fields = append(fields, fmt.Sprintf("%s: %d", childrenCountInfo, d.childrenCount))
+	}
+
+	gap, remain, ok := style.CalculateGap(width-4, fields...)
+	if !ok {
+		gap = 1
+	}
+
+	fieldsString := dueInfo + dueValue + strings.Repeat(" ", gap+remain) +
+		statusInfo + statusValue
+	if d.itemType != RecordTypeSession {
+		fieldsString += strings.Repeat(" ", gap) +
+			lipgloss.NewStyle().
+				Render(
+					style.Document.Primary.Render(childrenCountInfo)+
+						style.Document.Normal.Render(
+							fmt.Sprintf("%d", d.childrenCount),
+						),
+				)
+	}
+	fieldsString += strings.Repeat(" ", gap) + notesInfo + notesValue
+
+	detail += lipgloss.NewStyle().Padding(0, 2).Render(
+		fieldsString,
+	)
+
+	builder.WriteString(detail)
 
 	return builder.String()
 }

@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/paginator"
 	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/liuminhaw/yatijapp-tui/colors"
 )
@@ -174,42 +173,6 @@ func FullPageErrorView(
 	)
 
 	return ContainerStyle(termWidth, container, 5).Render(container)
-}
-
-type ConfirmCheckItem struct {
-	Label string // "Target", "Action", "Session"
-	Value string
-}
-
-type ConfirmCheck struct {
-	Prompt  string
-	Warning string
-	Cmd     tea.Cmd
-}
-
-func (c ConfirmCheck) View(title string, width int) string {
-	var b strings.Builder
-	b.WriteString(Document.Secondary.Bold(true).Render(title) + "\n\n")
-	b.WriteString(Document.Highlight.Render(c.Prompt) + "\n")
-	b.WriteString(ErrorStyle.Render(c.Warning) + "\n\n")
-	b.WriteString(lipgloss.StyleRanges(
-		"[y]es        [n]o",
-		lipgloss.Range{Start: 0, End: 3, Style: Document.Primary},
-		lipgloss.Range{Start: 3, End: 5, Style: Document.Normal},
-		lipgloss.Range{Start: 13, End: 16, Style: Document.Primary},
-		lipgloss.Range{Start: 16, End: 17, Style: Document.Normal},
-	))
-
-	return lipgloss.JoinVertical(
-		lipgloss.Center,
-		lipgloss.NewStyle().
-			Width(width).
-			Align(lipgloss.Center, lipgloss.Center).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(colors.Text).
-			Padding(0, 1).
-			Render(b.String()),
-	)
 }
 
 func NewPaginator(perPage int) paginator.Model {

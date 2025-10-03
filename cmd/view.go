@@ -15,7 +15,9 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/colors"
 	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
+	"github.com/liuminhaw/yatijapp-tui/internal/model"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
+	"github.com/liuminhaw/yatijapp-tui/pkg/strview"
 )
 
 type viewHooks struct {
@@ -36,13 +38,14 @@ type viewPage struct {
 	width  int
 	height int
 
-	spinner      spinner.Model
-	loading      bool
-	confirmation *style.ConfirmCheck
+	spinner spinner.Model
+	loading bool
 
 	msg   string
 	error error
 	prev  tea.Model // Previous model for navigation
+
+	popupModel tea.Model
 }
 
 func newViewPage(
@@ -107,40 +110,23 @@ func newSessionViewPage(
 	return page
 }
 
-func (v *viewPage) setConfirmation(prompt, warning string) {
-	v.confirmation = &style.ConfirmCheck{Prompt: prompt, Warning: warning}
-}
-
 func (v viewPage) Init() tea.Cmd {
 	return tea.Batch(v.spinner.Tick, v.hooks.load(v.cfg.serverURL, v.uuid, "", v.cfg.authClient))
 }
 
 func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		v.width = msg.Width
 		v.height = msg.Height
 	case tea.KeyMsg:
-		if v.confirmation != nil {
-			switch msg.String() {
-			case "y":
-				v.confirmation = nil
-				v.clearMsg()
-				return v, v.hooks.delete(v.cfg.serverURL, v.uuid, v.cfg.authClient)
-			case "n":
-				v.confirmation = nil
-				return v, nil
-			default:
-				return v, nil
-			}
-		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return v, tea.Quit
 		case "<":
-			// return v, switchToPreviousCmd(v.prev)
 			return v, switchToPreviousCmd(v.prevPage())
 		case "e":
 			return v, switchToEditCmd(v.recordType, v.record)
@@ -148,18 +134,38 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if v.record == nil {
 				panic("view page item is nil in delete")
 			}
-			var prompt, warning string
+			var prompts, warnings []string
 			switch v.record.GetActualType() {
 			case data.RecordTypeTarget:
-				prompt = "Proceed to delete target \"" + v.record.GetTitle() + "\"?"
-				warning = "All actions and sessions under this target will be deleted as well."
+				prompts = []string{"Proceed to delete target \"" + v.record.GetTitle() + "\"?"}
+				warnings = []string{"All actions and sessions under this target will be deleted as well."}
 			case data.RecordTypeAction:
-				prompt = "Proceed to delete action \"" + v.record.GetTitle() + "\"?"
-				warning = "All sessions under this action will be deleted as well."
+				prompts = []string{"Proceed to delete action \"" + v.record.GetTitle() + "\"?"}
+				warnings = []string{"All sessions under this action will be deleted as well."}
+			case data.RecordTypeSession:
+				if v.record.GetStatus() == "completed" {
+					prompts = []string{
+						"Proceed to delete session",
+						"\"" + v.record.GetTitle() + "\"?",
+					}
+				} else {
+					prompts = []string{"Proceed to delete session \"" + v.record.GetTitle() + "\"?"}
+				}
 			}
-			v.setConfirmation(prompt, warning)
+			deleteCmd := v.hooks.delete(v.cfg.serverURL, v.uuid, v.cfg.authClient)
+			v.popupModel = model.NewAlert(
+				"Confirm Deletion",
+				"confirmation",
+				prompts,
+				warnings,
+				60,
+				map[string]tea.Cmd{"confirm": deleteCmd, "cancel": cancelPopupCmd},
+			)
 			return v, nil
 		}
+	case cancelPopupMsg:
+		v.popupModel = nil
+		v.clearMsg()
 	case apiSuccessResponseMsg:
 		v.loading = false
 		return v, v.hooks.load(v.cfg.serverURL, v.uuid, msg.msg, v.cfg.authClient)
@@ -205,7 +211,13 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	v.viewport, cmd = v.viewport.Update(msg)
-	return v, cmd
+	cmds = append(cmds, cmd)
+	if v.popupModel != nil {
+		v.popupModel, cmd = v.popupModel.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	return v, tea.Batch(cmds...)
 }
 
 func (v viewPage) View() string {
@@ -250,6 +262,12 @@ func (v viewPage) View() string {
 		v.viewport.View(),
 		helperView,
 	)
+
+	if v.popupModel != nil {
+		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(v.popupModel.View())/2
+		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(v.popupModel.View())/2
+		container = strview.PlaceOverlay(overlayX, overlayY, v.popupModel.View(), container)
+	}
 
 	return style.ContainerStyle(v.width, container, 5).Render(container)
 }

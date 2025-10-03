@@ -40,9 +40,14 @@ type (
 		title string
 		uuid  string
 	}
+
+	cancelPopupMsg struct{}
 )
 
-var confirmationCmd = func() tea.Msg { return confirmationMsg{} }
+var (
+	confirmationCmd = func() tea.Msg { return confirmationMsg{} }
+	cancelPopupCmd  = func() tea.Msg { return cancelPopupMsg{} }
+)
 
 func (m internalErrorMsg) Error() string {
 	return m.msg + ": " + m.err.Error()

@@ -21,9 +21,12 @@ func MultipleValidators(validators ...func(string) error) func(string) error {
 	}
 }
 
-var ValidFormats = []string{"2006-01-02"}
+var (
+	ValidDateFormats     = []string{"2006-01-02"}
+	ValidDateTimeFormats = []string{"2006-01-02 15:04:05"}
+)
 
-func ValidateDate(formats []string) func(string) error {
+func ValidateDateTime(formats []string) func(string) error {
 	return func(date string) error {
 		if date == "" {
 			return nil

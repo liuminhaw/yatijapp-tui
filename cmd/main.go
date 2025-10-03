@@ -218,6 +218,19 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.active,
 		)
 		return m, m.active.Init()
+	case switchToSessionEditMsg:
+		page, err := newSessionConfigPage(
+			m.cfg,
+			"Modify Session",
+			style.ViewSize{Width: m.width, Height: m.height},
+			msg.record,
+			m.active,
+		)
+		if err != nil {
+			// TODO: Switch to error view
+			return m, tea.Quit
+		}
+		m.active = page
 	case switchToSessionViewMsg:
 		m.active = newSessionViewPage(
 			m.cfg,

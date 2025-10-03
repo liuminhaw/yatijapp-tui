@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
+	"github.com/liuminhaw/yatijapp-tui/internal/model"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 	"github.com/liuminhaw/yatijapp-tui/pkg/strview"
 )
@@ -43,9 +44,8 @@ type listPage struct {
 	width  int
 	height int
 
-	spinner      spinner.Model
-	loading      bool
-	confirmation *style.ConfirmCheck
+	spinner spinner.Model
+	loading bool
 
 	msg   string
 	error error
@@ -126,10 +126,6 @@ func newSessionListPage(
 	return page
 }
 
-func (l *listPage) setConfirmation(prompt, warning string, cmd tea.Cmd) {
-	l.confirmation = &style.ConfirmCheck{Prompt: prompt, Warning: warning, Cmd: cmd}
-}
-
 func (l listPage) Init() tea.Cmd {
 	return tea.Batch(
 		l.spinner.Tick,
@@ -165,14 +161,17 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := l.popupModel.Init()
 		cmds = append(cmds, cmd)
 		l.popup = l.popupModel.View()
-	}
-	if l.popupModel != nil {
-		var cmd tea.Cmd
-		l.popupModel, cmd = l.popupModel.Update(msg)
-		l.popup = l.popupModel.View()
-		cmds = append(cmds, cmd)
-
-		return l, tea.Batch(cmds...)
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "?":
+			l.clearMsg()
+			l.helper = !l.helper
+			if l.helper {
+				l.helperPopup(20)
+			} else {
+				l.popup = ""
+			}
+		}
 	}
 
 	switch msg := msg.(type) {
@@ -180,21 +179,8 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l.width = msg.Width
 		l.height = msg.Height
 	case tea.KeyMsg:
-		if l.confirmation != nil {
-			switch msg.String() {
-			case "y":
-				execCmd := l.confirmation.Cmd
-				l.confirmation = nil
-				l.popup = ""
-				l.clearMsg()
-				return l, execCmd
-			case "n":
-				l.confirmation = nil
-				l.popup = ""
-				return l, nil
-			default:
-				return l, nil
-			}
+		if l.popup != "" {
+			break
 		}
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -250,8 +236,15 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						l, l,
 						l.cfg.authClient,
 					)
-					l.setConfirmation("Proceed to end session \""+l.records[l.selected].GetTitle()+"\"?", "", updateCmd)
-					l.popup = l.confirmation.View("Confirm End Session", 60)
+					l.popupModel = model.NewAlert(
+						"Confirm End Session",
+						"confirmation",
+						[]string{"Proceed to end session \"" + l.records[l.selected].GetTitle() + "\"?"},
+						[]string{""},
+						60,
+						map[string]tea.Cmd{"confirm": updateCmd, "cancel": cancelPopupCmd},
+					)
+					l.popup = l.popupModel.View()
 					return l, confirmationCmd
 				}
 				return l, switchToRecordsCmd(l.records[l.selected])
@@ -262,20 +255,27 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return l, nil
 			}
 			return l, switchToPreviousCmd(l.prev)
-		case "?":
-			l.clearMsg()
-			l.helper = !l.helper
-			if l.helper {
-				l.helperPopup(20)
-			} else {
-				l.popup = ""
-			}
 		case "v":
 			if len(l.records) > 0 {
 				return l, switchToViewCmd(l.recordType, l.records[l.selected].GetUUID())
 			}
 		case "e":
 			if len(l.records) > 0 {
+				if l.recordType == data.RecordTypeSession {
+					session := l.records[l.selected].(data.Session)
+					if !session.EndsAt.Valid {
+						l.popupModel = model.NewAlert(
+							"Edit Session Not Allowed",
+							"notification",
+							[]string{"Please end the session before editing."},
+							[]string{"Cannot edit an ongoing session."},
+							60,
+							map[string]tea.Cmd{"return": cancelPopupCmd},
+						)
+						l.popup = l.popupModel.View()
+						return l, nil
+					}
+				}
 				l.loading = true
 				l.clearMsg()
 				return l, l.hooks.load(l.cfg.serverURL, l.records[l.selected].GetUUID(), "", l.cfg.authClient)
@@ -285,20 +285,30 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return l, nil
 			}
 
-			var prompt, warning string
+			var prompts, warnings []string
 			switch l.recordType {
 			case data.RecordTypeTarget:
-				prompt = "Proceed to delete target \"" + l.records[l.selected].GetTitle() + "\"?"
-				warning = "All actions and sessions under this target will be deleted as well."
+				prompts = []string{"Proceed to delete target \"" + l.records[l.selected].GetTitle() + "\"?"}
+				warnings = []string{"All actions and sessions under this target will be deleted as well."}
 			case data.RecordTypeAction:
-				prompt = "Proceed to delete action \"" + l.records[l.selected].GetTitle() + "\"?"
-				warning = "All sessions under this action will be deleted as well."
+				prompts = []string{"Proceed to delete action \"" + l.records[l.selected].GetTitle() + "\"?"}
+				warnings = []string{"All sessions under this action will be deleted as well."}
 			case data.RecordTypeSession:
-				prompt = "Proceed to delete session \"" + l.records[l.selected].GetTitle() + "\"?"
+				if l.records[l.selected].GetStatus() == "completed" {
+					prompts = []string{
+						"Proceed to delete session",
+						"\"" + l.records[l.selected].GetTitle() + "\"?",
+					}
+				} else {
+					prompts = []string{"Proceed to delete session \"" + l.records[l.selected].GetTitle() + "\"?"}
+				}
 			}
 			deleteCmd := l.hooks.delete(l.cfg.serverURL, l.records[l.selected].GetUUID(), l.cfg.authClient)
-			l.setConfirmation(prompt, warning, deleteCmd)
-			l.popup = l.confirmation.View("Confirm Deletion", 60)
+			l.popupModel = model.NewAlert(
+				"Confirm Deletion", "confirmation", prompts, warnings, 60,
+				map[string]tea.Cmd{"confirm": deleteCmd, "cancel": cancelPopupCmd},
+			)
+			l.popup = l.popupModel.View()
 			return l, confirmationCmd
 		case "n":
 			return l, switchToCreateCmd(l.recordType, l.src)
@@ -311,6 +321,10 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				l.cfg.authClient,
 			)
 		}
+	case cancelPopupMsg:
+		l.popup = ""
+		l.popupModel = nil
+		return l, nil
 	case showSessionCreateMsg:
 		var record yatijappRecord
 		if !msg.parents.IsEmpty() {
@@ -363,6 +377,8 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l.loading = false
 		return l, switchToEditCmd(l.recordType, msg.record)
 	case recordDeletedMsg:
+		l.popupModel = nil
+		l.popup = ""
 		l.clearMsg()
 		return l, l.hooks.loadAll(
 			l.cfg.serverURL,
@@ -407,6 +423,11 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	l.paginator, cmd = l.paginator.Update(msg)
 	cmds = append(cmds, cmd)
+	if l.popupModel != nil {
+		l.popupModel, cmd = l.popupModel.Update(msg)
+		l.popup = l.popupModel.View()
+		cmds = append(cmds, cmd)
+	}
 
 	return l, tea.Batch(cmds...)
 }

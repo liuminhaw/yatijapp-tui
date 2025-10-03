@@ -45,7 +45,10 @@ type (
 	switchToTargetSelectorMsg struct{}
 
 	switchToSessionViewMsg struct{ uuid string }
-	showSessionCreateMsg   struct {
+	switchToSessionEditMsg struct {
+		record yatijappRecord
+	}
+	showSessionCreateMsg struct {
 		parents data.RecordParents
 	}
 )
@@ -130,6 +133,8 @@ func switchToEditCmd(recordType data.RecordType, record yatijappRecord) tea.Cmd 
 			return switchToTargetEditMsg{record: record}
 		case data.RecordTypeAction:
 			return switchToActionEditMsg{record: record}
+		case data.RecordTypeSession:
+			return switchToSessionEditMsg{record: record}
 		}
 
 		panic("unsupported record type in switchToEditCmd")

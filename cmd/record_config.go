@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -94,7 +95,7 @@ func newRecordConfigPage(
 	due.Width = dueDateInputViewWidth - 1
 	due.Prompt = ""
 	due.Validate = validator.MultipleValidators(
-		validator.ValidateDate(validator.ValidFormats),
+		validator.ValidateDateTime(validator.ValidDateFormats),
 		validator.ValidateDateAfter(time.Now().AddDate(0, 0, -1)),
 	)
 
@@ -146,10 +147,14 @@ func newRecordConfigPage(
 			}
 		}
 
-		parentTarget.SetValue(record.GetParentsTitle()[data.RecordTypeTarget])
-		// hiddens["parent_target_uuid"] = struct{ val string }{
-		// 	val: record.GetParentsUUID()[data.RecordTypeTarget],
-		// }
+		if err := parentTarget.SetValue(record.GetParentsTitle()[data.RecordTypeTarget]); err != nil {
+			return recordConfigPage{}, internalErrorMsg{
+				msg: "failed to load " + strings.ToLower(
+					string(recordType),
+				) + " parent target data",
+				err: err,
+			}
+		}
 		hiddens["parent_target_uuid"] = record.GetParentsUUID()[data.RecordTypeTarget]
 
 		uuid = record.GetUUID()
@@ -259,27 +264,83 @@ func newSessionConfigPage(
 	parentAction := components.NewText("", showSelectorMsg{selection: data.RecordTypeAction})
 	parentAction.ValidateFunc = validator.ValidateRequired("action is required")
 
-	focusables = append(focusables, parentTarget, parentAction, note)
-	focusables[0].Focus() // Focus parent target field
+	startsAt := textinput.New()
+	startsAt.Prompt = ""
+	startsAt.Placeholder = "YYYY-mm-dd HH:MM:SS"
+	startsAt.Width = formWidth - 1
+	startsAt.Validate = validator.ValidateDateTime(validator.ValidDateTimeFormats)
+
+	endsAt := textinput.New()
+	endsAt.Prompt = ""
+	endsAt.Placeholder = "YYYY-mm-dd HH:MM:SS"
+	endsAt.Width = formWidth - 1
+	endsAt.Validate = validator.ValidateDateTime(validator.ValidDateTimeFormats)
+
+	var uuid string
+	recordAction := cmdCreate
+	focused := 0
+	if record != nil {
+		if err := note.SetValue(record.GetNote()); err != nil {
+			return recordConfigPage{}, internalErrorMsg{
+				msg: "failed to load session note data",
+				err: err,
+			}
+		}
+
+		if err := parentTarget.SetValue(record.GetParentsTitle()[data.RecordTypeTarget]); err != nil {
+			return recordConfigPage{}, internalErrorMsg{
+				msg: "failed to load session parent target data",
+				err: err,
+			}
+		}
+		if err := parentAction.SetValue(record.GetParentsTitle()[data.RecordTypeAction]); err != nil {
+			return recordConfigPage{}, internalErrorMsg{
+				msg: "failed to load session parent action data",
+				err: err,
+			}
+		}
+		hiddens["parent_target_uuid"] = record.GetParentsUUID()[data.RecordTypeTarget]
+		hiddens["parent_action_uuid"] = record.GetParentsUUID()[data.RecordTypeAction]
+
+		uuid = record.GetUUID()
+
+		session := record.(data.Session)
+		if session.EndsAt.Valid {
+			recordAction = cmdUpdate
+			endsAt.SetValue(session.EndsAt.Time.Format("2006-01-02 15:04:05"))
+			startsAt.SetValue(session.StartsAt.Format("2006-01-02 15:04:05"))
+
+			focusables = append(
+				focusables,
+				parentTarget,
+				parentAction,
+				model.NewTextInputWrapper(startsAt),
+				model.NewTextInputWrapper(endsAt),
+				note,
+			)
+			focused = 2
+		} else {
+			focusables = append(focusables, parentTarget, parentAction, note)
+			focused = 2
+		}
+	} else {
+		focusables = append(focusables, parentTarget, parentAction, note)
+		focused = 0
+	}
+	focusables[focused].Focus()
 
 	selectorFields[data.RecordTypeTarget] = 0
 	selectorFields[data.RecordTypeAction] = 1
 
-	if record != nil {
-		parentTarget.SetValue(record.GetParentsTitle()[data.RecordTypeTarget])
-		hiddens["parent_target_uuid"] = record.GetParentsUUID()[data.RecordTypeTarget]
-		parentAction.SetValue(record.GetParentsTitle()[data.RecordTypeAction])
-		hiddens["parent_action_uuid"] = record.GetParentsUUID()[data.RecordTypeAction]
-	}
-
 	return recordConfigPage{
 		cfg:            cfg,
-		action:         cmdCreate,
+		action:         recordAction,
+		uuid:           uuid,
 		record:         record,
 		recordType:     data.RecordTypeSession,
 		title:          title,
 		fields:         focusables,
-		focused:        0,
+		focused:        focused,
 		hiddenFields:   hiddens,
 		selectorFields: selectorFields,
 		width:          size.Width,
@@ -407,7 +468,14 @@ func (p recordConfigPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (p recordConfigPage) View() string {
 	if p.recordType == data.RecordTypeSession {
-		return p.sessionCreateView()
+		switch p.action {
+		case cmdCreate:
+			return p.sessionCreateView()
+		case cmdUpdate:
+			return p.sessionConfigView()
+		default:
+			panic("unknown session action")
+		}
 	}
 
 	return p.tarActConfigView()
@@ -559,6 +627,69 @@ func (p recordConfigPage) sessionCreateView() string {
 		Render(form)
 }
 
+func (p recordConfigPage) sessionConfigView() string {
+	targetField := p.parentField(data.RecordTypeTarget, 0, false)
+	actionField := p.parentField(data.RecordTypeAction, 1, false)
+	startsAt := p.fields[2]
+	endsAt := p.fields[3]
+	noteField := p.noteField(4)
+
+	titleView := style.TitleBarView([]string{p.title}, viewWidth, false)
+
+	configContent := lipgloss.JoinVertical(
+		lipgloss.Left,
+		targetField,
+		actionField,
+		lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			lipgloss.NewStyle().Width(30).Margin(1, 5, 0, 5).Render(
+				fmt.Sprintf(
+					"%s\n%s\n%s",
+					style.FormFieldStyle.Prompt("Starts At", startsAt.Focused()),
+					style.FormFieldStyle.Content.Render(startsAt.View()),
+					style.FormFieldStyle.Error.Render(startsAt.Error()),
+				),
+			),
+			lipgloss.NewStyle().Width(30).Margin(1, 5, 0, 5).Render(
+				fmt.Sprintf(
+					"%s\n%s\n%s",
+					style.FormFieldStyle.Prompt("Ends At", endsAt.Focused()),
+					style.FormFieldStyle.Content.Render(endsAt.View()),
+					style.FormFieldStyle.Error.Render(endsAt.Error()),
+				),
+			),
+		),
+		noteField+"\n",
+	)
+
+	helperContent := []style.HelperContent{
+		{Key: "Esc", Action: "back"},
+		{Key: "Tab/Shift+Tab", Action: "navigate"},
+		{Key: "<C-s>", Action: "save"},
+		{Key: "<C-c>", Action: "quit"},
+	}
+
+	helperView := style.HelperView(helperContent, viewWidth)
+
+	msgView := style.ErrorView(style.ViewSize{Width: viewWidth, Height: 1}, p.err, nil)
+
+	container := lipgloss.JoinVertical(
+		lipgloss.Center,
+		titleView,
+		configContent,
+		msgView,
+		helperView,
+	)
+
+	if p.selector != nil {
+		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(p.selector.View())/2
+		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(p.selector.View())/2
+		container = strview.PlaceOverlay(overlayX, overlayY, p.selector.View(), container)
+	}
+
+	return style.ContainerStyle(p.width, container, 5).Render(container)
+}
+
 func (p recordConfigPage) validationError() error {
 	return fieldsValidation(p.fields, "input validation failed")
 }
@@ -634,6 +765,25 @@ func (p recordConfigPage) sessionCreate() (recordRequestData, tea.Cmd) {
 }
 
 func (p recordConfigPage) update() tea.Cmd {
+	var d recordRequestData
+	var cmd tea.Cmd
+	switch p.recordType {
+	case data.RecordTypeTarget, data.RecordTypeAction:
+		d, cmd = p.tarActUpdate()
+	case data.RecordTypeSession:
+		d, cmd = p.sessionUpdate()
+	default:
+		panic("update record with unknown type: " + string(p.recordType))
+	}
+
+	if cmd != nil {
+		return cmd
+	}
+
+	return p.hooks.update(p.cfg.serverURL, "", d, p, p.prevPage(), p.cfg.authClient)
+}
+
+func (p recordConfigPage) tarActUpdate() (recordRequestData, tea.Cmd) {
 	title := p.fields[0].Value()
 	due := p.fields[1].Value()
 	description := p.fields[2].Value()
@@ -641,7 +791,7 @@ func (p recordConfigPage) update() tea.Cmd {
 	note := p.fields[4].Value()
 
 	if err := p.validationError(); err != nil {
-		return validationErrorCmd(err)
+		return recordRequestData{}, validationErrorCmd(err)
 	}
 
 	d := recordRequestData{
@@ -656,7 +806,46 @@ func (p recordConfigPage) update() tea.Cmd {
 		d.targetUUID = p.hiddenFields["parent_target_uuid"]
 	}
 
-	return p.hooks.update(p.cfg.serverURL, "", d, p, p.prevPage(), p.cfg.authClient)
+	return d, nil
+}
+
+func (p recordConfigPage) sessionUpdate() (recordRequestData, tea.Cmd) {
+	targetUUID := p.hiddenFields["parent_target_uuid"]
+	actionUUID := p.hiddenFields["parent_action_uuid"]
+	startsAt := p.fields[2].Value()
+	endsAt := p.fields[3].Value()
+	note := p.fields[4].Value()
+
+	if err := p.validationError(); err != nil {
+		return recordRequestData{}, validationErrorCmd(err)
+	}
+
+	if targetUUID == "" {
+		return recordRequestData{}, validationErrorCmd(errors.New("target is required"))
+	}
+	if actionUUID == "" {
+		return recordRequestData{}, validationErrorCmd(errors.New("action is required"))
+	}
+
+	layout := "2006-01-02 15:04:05"
+	startsAtTime, err := time.ParseInLocation(layout, startsAt, time.Local)
+	if err != nil {
+		return recordRequestData{}, validationErrorCmd(errors.New("invalid starts at value"))
+	}
+	endsAtTime, err := time.ParseInLocation(layout, endsAt, time.Local)
+	if err != nil {
+		return recordRequestData{}, validationErrorCmd(errors.New("invalid ends at value"))
+	}
+	d := recordRequestData{
+		uuid:       p.uuid,
+		targetUUID: targetUUID,
+		actionUUID: actionUUID,
+		startsAt:   startsAtTime,
+		endsAt:     sql.NullTime{Time: endsAtTime, Valid: true},
+		note:       note,
+	}
+
+	return d, nil
 }
 
 func (p recordConfigPage) noteField(fieldIndex int, styling ...lipgloss.Style) string {
