@@ -179,7 +179,7 @@ func NewPaginator(perPage int) paginator.Model {
 	p := paginator.New()
 	p.Type = paginator.Dots
 	p.PerPage = perPage
-	p.ActiveDot = lipgloss.NewStyle().Foreground(colors.DocumentText).Render("•")
+	p.ActiveDot = lipgloss.NewStyle().Foreground(colors.Text).Render("•")
 	p.InactiveDot = lipgloss.NewStyle().Foreground(colors.HelperTextDim).Render("•")
 
 	return p

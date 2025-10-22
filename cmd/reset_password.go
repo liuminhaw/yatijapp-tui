@@ -261,7 +261,7 @@ func (m resetPasswordPage) sendResetToken() tea.Cmd {
 		request := data.ResetPasswordTokenRequest{
 			Email: email,
 		}
-		message, err := request.Do(m.cfg.serverURL)
+		message, err := request.Do(m.cfg.apiEndpoint)
 		if err != nil {
 			return err
 		}
@@ -287,7 +287,7 @@ func (m resetPasswordPage) resetPassword() tea.Cmd {
 			Token:    token,
 			Password: pasword,
 		}
-		message, err := request.ResetPassword(m.cfg.serverURL)
+		message, err := request.ResetPassword(m.cfg.apiEndpoint)
 		if err != nil {
 			return err
 		}

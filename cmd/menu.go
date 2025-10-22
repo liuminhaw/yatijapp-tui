@@ -58,7 +58,7 @@ func newMenuPage(cfg config, width, height int) menuPage {
 
 func (m menuPage) loadLoginUser() tea.Cmd {
 	return func() tea.Msg {
-		user, err := data.GetCurrentUser(m.cfg.serverURL, m.cfg.authClient)
+		user, err := data.GetCurrentUser(m.cfg.apiEndpoint, m.cfg.authClient)
 		if err != nil {
 			return err
 		}
@@ -129,6 +129,7 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadLoginUser()
 		}
 	case data.UnauthorizedApiDataErr:
+		m.cfg.logger.Error(msg.Err.Error(), slog.String("action", "load login user"))
 		m.greeting = ""
 		m.view = m.unauthView
 		m.viewPage = 0
@@ -138,6 +139,7 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.error = errors.New(msg.Msg)
 		m.loading = false
 	case error:
+		m.cfg.logger.Error(msg.Error(), slog.String("action", "load login user"))
 		m.error = msg
 		m.loading = false
 	case spinner.TickMsg:
@@ -237,7 +239,7 @@ func (m menuPage) View() string {
 
 func (m menuPage) signout() tea.Cmd {
 	return func() tea.Msg {
-		_, err := data.Signout(m.cfg.serverURL, m.cfg.authClient)
+		_, err := data.Signout(m.cfg.apiEndpoint, m.cfg.authClient)
 		if err != nil {
 			return err
 		}

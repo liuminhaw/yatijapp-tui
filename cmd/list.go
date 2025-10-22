@@ -20,7 +20,7 @@ import (
 )
 
 type listHooks struct {
-	loadAll func(serverURL, srcUUID, msg string, client *authclient.AuthClient) tea.Cmd
+	loadAll func(serverURL, srcUUID, msg, src string, client *authclient.AuthClient) tea.Cmd
 	load    func(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Cmd
 	delete  func(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd
 	update  func(
@@ -53,19 +53,20 @@ type listPage struct {
 	src  data.RecordParents
 	prev tea.Model // Previous model for navigation
 
-	popupModel tea.Model
-	popup      string
+	popupModels []tea.Model
+	popup       string
 }
 
 func newListPage(cfg config, termSize style.ViewSize, prev tea.Model) listPage {
 	return listPage{
-		cfg:       cfg,
-		paginator: style.NewPaginator(10),
-		width:     termSize.Width,
-		height:    termSize.Height,
-		spinner:   spinner.New(spinner.WithSpinner(spinner.Line)),
-		loading:   true,
-		prev:      prev,
+		cfg:         cfg,
+		paginator:   style.NewPaginator(10),
+		width:       termSize.Width,
+		height:      termSize.Height,
+		spinner:     spinner.New(spinner.WithSpinner(spinner.Line)),
+		loading:     true,
+		prev:        prev,
+		popupModels: []tea.Model{},
 	}
 }
 
@@ -130,9 +131,10 @@ func (l listPage) Init() tea.Cmd {
 	return tea.Batch(
 		l.spinner.Tick,
 		l.hooks.loadAll(
-			l.cfg.serverURL,
+			l.cfg.apiEndpoint,
 			l.src[l.recordType.GetParentType()].UUID,
 			"",
+			"list",
 			l.cfg.authClient,
 		),
 	)
@@ -142,25 +144,25 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
+	var popupModel tea.Model
 	switch msg := msg.(type) {
 	case showSelectorMsg:
 		switch msg.selection {
 		case data.RecordTypeTarget:
-			l.popupModel = newTargetSelectorPage(l.cfg, style.ViewSize{Width: l.width, Height: l.height}, l)
+			popupModel = newTargetSelectorPage(l.cfg, style.ViewSize{Width: l.width, Height: l.height}, l)
 		case data.RecordTypeAction:
 			targetUUID := ""
-			if configModel, ok := l.popupModel.(recordConfigPage); ok {
+			if configModel, ok := l.popupModels[len(l.popupModels)-1].(recordConfigPage); ok {
 				targetUUID = configModel.hiddenFields["parent_target_uuid"]
 			} else {
 				panic("action selector without target config model as popupModel")
 			}
-			l.popupModel = newActionSelectorPage(
-				l.cfg, style.ViewSize{Width: l.width, Height: l.height}, targetUUID, l,
-			)
+			popupModel = newActionSelectorPage(l.cfg, style.ViewSize{Width: l.width, Height: l.height}, targetUUID, l)
 		}
-		cmd := l.popupModel.Init()
+		l.popupModels = append(l.popupModels, popupModel)
+		cmd := popupModel.Init()
 		cmds = append(cmds, cmd)
-		l.popup = l.popupModel.View()
+		l.popup = l.popupModels[len(l.popupModels)-1].View()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "?":
@@ -226,7 +228,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 
 					updateCmd := l.hooks.update(
-						l.cfg.serverURL,
+						l.cfg.apiEndpoint,
 						"Session ended",
 						recordRequestData{
 							uuid:       l.records[l.selected].GetUUID(),
@@ -236,7 +238,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						l, l,
 						l.cfg.authClient,
 					)
-					l.popupModel = model.NewAlert(
+					popupModel = model.NewAlert(
 						"Confirm End Session",
 						"confirmation",
 						[]string{"Proceed to end session \"" + l.records[l.selected].GetTitle() + "\"?"},
@@ -244,7 +246,8 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						60,
 						map[string]tea.Cmd{"confirm": updateCmd, "cancel": cancelPopupCmd},
 					)
-					l.popup = l.popupModel.View()
+					l.popupModels = append(l.popupModels, popupModel)
+					l.popup = l.popupModels[len(l.popupModels)-1].View()
 					return l, confirmationCmd
 				}
 				return l, switchToRecordsCmd(l.records[l.selected])
@@ -264,7 +267,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if l.recordType == data.RecordTypeSession {
 					session := l.records[l.selected].(data.Session)
 					if !session.EndsAt.Valid {
-						l.popupModel = model.NewAlert(
+						popupModel = model.NewAlert(
 							"Edit Session Not Allowed",
 							"notification",
 							[]string{"Please end the session before editing."},
@@ -272,13 +275,14 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							60,
 							map[string]tea.Cmd{"return": cancelPopupCmd},
 						)
-						l.popup = l.popupModel.View()
+						l.popupModels = append(l.popupModels, popupModel)
+						l.popup = l.popupModels[len(l.popupModels)-1].View()
 						return l, nil
 					}
 				}
 				l.loading = true
 				l.clearMsg()
-				return l, l.hooks.load(l.cfg.serverURL, l.records[l.selected].GetUUID(), "", l.cfg.authClient)
+				return l, l.hooks.load(l.cfg.apiEndpoint, l.records[l.selected].GetUUID(), "", l.cfg.authClient)
 			}
 		case "d":
 			if len(l.records) == 0 {
@@ -303,27 +307,33 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					prompts = []string{"Proceed to delete session \"" + l.records[l.selected].GetTitle() + "\"?"}
 				}
 			}
-			deleteCmd := l.hooks.delete(l.cfg.serverURL, l.records[l.selected].GetUUID(), l.cfg.authClient)
-			l.popupModel = model.NewAlert(
+			deleteCmd := l.hooks.delete(l.cfg.apiEndpoint, l.records[l.selected].GetUUID(), l.cfg.authClient)
+			popupModel = model.NewAlert(
 				"Confirm Deletion", "confirmation", prompts, warnings, 60,
 				map[string]tea.Cmd{"confirm": deleteCmd, "cancel": cancelPopupCmd},
 			)
-			l.popup = l.popupModel.View()
+			l.popupModels = append(l.popupModels, popupModel)
+			l.popup = l.popupModels[len(l.popupModels)-1].View()
 			return l, confirmationCmd
 		case "n":
 			return l, switchToCreateCmd(l.recordType, l.src)
 		case "ctrl+r":
 			l.clearMsg()
 			return l, l.hooks.loadAll(
-				l.cfg.serverURL,
+				l.cfg.apiEndpoint,
 				l.src[l.recordType.GetParentType()].UUID,
 				"Records refreshed",
+				"list",
 				l.cfg.authClient,
 			)
 		}
 	case cancelPopupMsg:
-		l.popup = ""
-		l.popupModel = nil
+		l.popupModels = l.popupModels[:len(l.popupModels)-1]
+		if len(l.popupModels) == 0 {
+			l.popup = ""
+		} else {
+			l.popup = l.popupModels[len(l.popupModels)-1].View()
+		}
 		return l, nil
 	case showSessionCreateMsg:
 		var record yatijappRecord
@@ -338,7 +348,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		l.cfg.logger.Info("new session config page", slog.Any("src", l.src))
 		var err error
-		l.popupModel, err = newSessionConfigPage(
+		popupModel, err = newSessionConfigPage(
 			l.cfg,
 			"New Session",
 			style.ViewSize{Width: l.width, Height: l.height},
@@ -349,19 +359,24 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.cfg.logger.Error(err.Error(), slog.String("action", "show new session popup"))
 			return l, tea.Quit
 		}
-		l.cfg.logger.Info("new session popup", slog.Any("record", l.popupModel))
+		l.cfg.logger.Info("new session popup", slog.Any("record", l.popupModels))
 
-		l.popup = l.popupModel.View()
+		l.popupModels = append(l.popupModels, popupModel)
+		l.popup = l.popupModels[len(l.popupModels)-1].View()
 	case switchToPreviousMsg:
 		l.loading = true
 		l.clearMsg()
 		return l, l.hooks.loadAll(
-			l.cfg.serverURL,
+			l.cfg.apiEndpoint,
 			l.src.UUID(l.recordType.GetParentType()),
 			"",
+			"list",
 			l.cfg.authClient,
 		)
 	case allRecordsLoadedMsg:
+		if msg.src != "list" {
+			break
+		}
 		l.msg = msg.msg
 		l.records = msg.records
 		l.paginator.SetTotalPages(len(l.records))
@@ -377,13 +392,18 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l.loading = false
 		return l, switchToEditCmd(l.recordType, msg.record)
 	case recordDeletedMsg:
-		l.popupModel = nil
-		l.popup = ""
+		l.popupModels = l.popupModels[:len(l.popupModels)-1]
+		if len(l.popupModels) == 0 {
+			l.popup = ""
+		} else {
+			l.popup = l.popupModels[len(l.popupModels)-1].View()
+		}
 		l.clearMsg()
 		return l, l.hooks.loadAll(
-			l.cfg.serverURL,
+			l.cfg.apiEndpoint,
 			l.src.UUID(l.recordType.GetParentType()),
 			string(msg),
+			"list",
 			l.cfg.authClient,
 		)
 	case confirmationMsg:
@@ -393,7 +413,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l.clearMsg()
 		l.cfg.logger.Info("api success", slog.Any("src", l.src))
 		return l, l.hooks.loadAll(
-			l.cfg.serverURL, l.src.UUID(l.recordType.GetParentType()), msg.msg, l.cfg.authClient,
+			l.cfg.apiEndpoint, l.src.UUID(l.recordType.GetParentType()), msg.msg, "list", l.cfg.authClient,
 		)
 	case data.UnauthorizedApiDataErr:
 		l.cfg.logger.Error(
@@ -423,9 +443,10 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	l.paginator, cmd = l.paginator.Update(msg)
 	cmds = append(cmds, cmd)
-	if l.popupModel != nil {
-		l.popupModel, cmd = l.popupModel.Update(msg)
-		l.popup = l.popupModel.View()
+	if len(l.popupModels) > 0 {
+		lastIndex := len(l.popupModels) - 1
+		l.popupModels[lastIndex], cmd = l.popupModels[lastIndex].Update(msg)
+		l.popup = l.popupModels[lastIndex].View()
 		cmds = append(cmds, cmd)
 	}
 

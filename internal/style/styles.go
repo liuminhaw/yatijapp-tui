@@ -34,11 +34,6 @@ var InputStyle = struct {
 	Document lipgloss.Style
 	Helper   lipgloss.Style
 }{
-	Title: lipgloss.NewStyle().
-		Foreground(colors.MainText).
-		Background(colors.MainBg).
-		Padding(0, 2).
-		Bold(true),
 	Prompt:   lipgloss.NewStyle().Foreground(colors.Primary).Bold(true),
 	Selected: lipgloss.NewStyle().Foreground(colors.Secondary).Bold(true),
 	Document: lipgloss.NewStyle().Foreground(colors.Text),
@@ -65,12 +60,12 @@ var ChoicesStyle = map[string]struct {
 	},
 	"list": {
 		Choices:    lipgloss.NewStyle().Foreground(colors.Text),
-		ChoicesDim: lipgloss.NewStyle().Foreground(colors.DocumentTextDim),
+		ChoicesDim: lipgloss.NewStyle().Foreground(colors.TextMuted),
 		Choice: lipgloss.NewStyle().
 			Foreground(colors.BgLight).
 			Background(colors.Text).
 			Bold(true),
-		ChoiceContent: lipgloss.NewStyle().Foreground(colors.DocumentText),
+		ChoiceContent: lipgloss.NewStyle().Foreground(colors.Text),
 	},
 }
 

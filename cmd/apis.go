@@ -34,6 +34,7 @@ type yatijappRecord interface {
 type (
 	allRecordsLoadedMsg struct {
 		records []yatijappRecord
+		src     string
 		msg     string
 	}
 	getRecordLoadedMsg struct {
@@ -69,7 +70,7 @@ type (
 	}
 )
 
-func loadAllTargets(serverURL, nilUUID, msg string, client *authclient.AuthClient) tea.Cmd {
+func loadAllTargets(serverURL, nilUUID, msg, src string, client *authclient.AuthClient) tea.Cmd {
 	return func() tea.Msg {
 		targets, err := data.ListTargets(serverURL, client)
 		if err != nil {
@@ -83,12 +84,13 @@ func loadAllTargets(serverURL, nilUUID, msg string, client *authclient.AuthClien
 
 		return allRecordsLoadedMsg{
 			records: records,
+			src:     src,
 			msg:     msg,
 		}
 	}
 }
 
-func loadAllActions(serverURL, srcUUID, msg string, client *authclient.AuthClient) tea.Cmd {
+func loadAllActions(serverURL, srcUUID, msg, src string, client *authclient.AuthClient) tea.Cmd {
 	return func() tea.Msg {
 		actions, err := data.ListActions(serverURL, client, srcUUID)
 		if err != nil {
@@ -102,12 +104,13 @@ func loadAllActions(serverURL, srcUUID, msg string, client *authclient.AuthClien
 
 		return allRecordsLoadedMsg{
 			records: records,
+			src:     src,
 			msg:     msg,
 		}
 	}
 }
 
-func loadAllSessions(serverURL, srcUUID, msg string, client *authclient.AuthClient) tea.Cmd {
+func loadAllSessions(serverURL, srcUUID, msg, src string, client *authclient.AuthClient) tea.Cmd {
 	return func() tea.Msg {
 		sessions, err := data.ListSessions(serverURL, client, srcUUID)
 		if err != nil {
@@ -121,6 +124,7 @@ func loadAllSessions(serverURL, srcUUID, msg string, client *authclient.AuthClie
 
 		return allRecordsLoadedMsg{
 			records: records,
+			src:     src,
 			msg:     msg,
 		}
 	}

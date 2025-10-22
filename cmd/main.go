@@ -1,18 +1,14 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"log/slog"
-	"net/http"
-	"os"
-	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
-	"gopkg.in/natefinch/lumberjack.v2"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 type Focusable interface {
@@ -28,43 +24,25 @@ type Focusable interface {
 	Error() string
 }
 
-type config struct {
-	serverURL string // http://yatijapp.server.url
-	logger    *slog.Logger
-
-	authClient *authclient.AuthClient
-}
-
 func main() {
-	var cfg config
+	vConf := viper.New()
 
-	flag.StringVar(
-		&cfg.serverURL,
-		"url",
-		"http://localhost:8080",
-		"yatijapp server url (https://www.example.com)",
-	)
+	flag.String("api-endpoint", "https://api.yatij.app", "yatijapp server api endpoint")
+	flag.String("display-mode", "auto", "display mode: light | dark | auto")
 	flag.Parse()
 
-	homeDir, err := os.UserHomeDir()
+	cfg, err := configSetup(vConf)
 	if err != nil {
-		fmt.Println("Error getting home directory:", err)
-		os.Exit(1)
+		panic(err)
 	}
 
-	rotater := &lumberjack.Logger{
-		Filename:   fmt.Sprintf("%s/.yatijapp/tui.log", homeDir),
-		MaxSize:    100,
-		MaxBackups: 3,
-		MaxAge:     30,
-		Compress:   false,
-	}
-	cfg.logger = slog.New(slog.NewJSONHandler(rotater, nil))
-
-	cfg.authClient = &authclient.AuthClient{
-		Client:    http.DefaultClient,
-		Refresh:   authclient.RefreshToken(cfg.serverURL),
-		TokenPath: filepath.Join(homeDir, ".yatijapp", "creds", "token.json"),
+	switch cfg.displayMode {
+	case "light":
+		cfg.logger.Info("Using light display mode")
+		lipgloss.SetHasDarkBackground(false)
+	case "dark":
+		cfg.logger.Info("Using dark display mode")
+		lipgloss.SetHasDarkBackground(true)
 	}
 
 	// p := tea.NewProgram(newMainModel(cfg), tea.WithAltScreen(), tea.WithoutCatchPanics())

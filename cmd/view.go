@@ -111,7 +111,7 @@ func newSessionViewPage(
 }
 
 func (v viewPage) Init() tea.Cmd {
-	return tea.Batch(v.spinner.Tick, v.hooks.load(v.cfg.serverURL, v.uuid, "", v.cfg.authClient))
+	return tea.Batch(v.spinner.Tick, v.hooks.load(v.cfg.apiEndpoint, v.uuid, "", v.cfg.authClient))
 }
 
 func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -152,7 +152,7 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					prompts = []string{"Proceed to delete session \"" + v.record.GetTitle() + "\"?"}
 				}
 			}
-			deleteCmd := v.hooks.delete(v.cfg.serverURL, v.uuid, v.cfg.authClient)
+			deleteCmd := v.hooks.delete(v.cfg.apiEndpoint, v.uuid, v.cfg.authClient)
 			v.popupModel = model.NewAlert(
 				"Confirm Deletion",
 				"confirmation",
@@ -168,7 +168,7 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.clearMsg()
 	case apiSuccessResponseMsg:
 		v.loading = false
-		return v, v.hooks.load(v.cfg.serverURL, v.uuid, msg.msg, v.cfg.authClient)
+		return v, v.hooks.load(v.cfg.apiEndpoint, v.uuid, msg.msg, v.cfg.authClient)
 	case getRecordLoadedMsg:
 		v.record = msg.record
 		if err := v.renderViewport(); err != nil {

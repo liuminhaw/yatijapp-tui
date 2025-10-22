@@ -168,7 +168,7 @@ func (m signinPage) signin() tea.Cmd {
 			Email:    email,
 			Password: password,
 		}
-		if err := request.Signin(m.cfg.serverURL, m.cfg.authClient.TokenPath); err != nil {
+		if err := request.Signin(m.cfg.apiEndpoint, m.cfg.authClient.TokenPath); err != nil {
 			return err
 		}
 

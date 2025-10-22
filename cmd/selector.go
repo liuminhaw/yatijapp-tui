@@ -15,7 +15,7 @@ import (
 )
 
 type selectorHooks struct {
-	loadAll func(serverURL, srcUUID, msg string, client *authclient.AuthClient) tea.Cmd
+	loadAll func(serverURL, srcUUID, msg, src string, client *authclient.AuthClient) tea.Cmd
 }
 
 type selectorPage struct {
@@ -84,10 +84,10 @@ func (p selectorPage) Init() tea.Cmd {
 	var cmd tea.Cmd
 	if p.parentUUID == "" && p.recordType != data.RecordTypeTarget {
 		cmd = func() tea.Msg {
-			return allRecordsLoadedMsg{}
+			return allRecordsLoadedMsg{src: "selector"}
 		}
 	} else {
-		cmd = p.hooks.loadAll(p.cfg.serverURL, p.parentUUID, "", p.cfg.authClient)
+		cmd = p.hooks.loadAll(p.cfg.apiEndpoint, p.parentUUID, "", "selector", p.cfg.authClient)
 	}
 	return tea.Batch(p.spinner.Tick, cmd)
 }
@@ -112,6 +112,7 @@ func (p selectorPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "left", "h":
 			p.selection.prevPage()
 		case "<":
+			p.cfg.logger.Info("switch to previous page", "prev", p.prev)
 			return p, switchToPreviousCmd(p.prev)
 		case "enter":
 			if len(p.selection.records) == 0 {
@@ -121,6 +122,9 @@ func (p selectorPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return p, selectorSelectedCmd(p.prev, selected.GetTitle(), selected.GetUUID(), p.recordType)
 		}
 	case allRecordsLoadedMsg:
+		if msg.src != "selector" {
+			break
+		}
 		p.selection.records = msg.records
 		p.selection.p.SetTotalPages(len(p.selection.records))
 		p.loading = false
@@ -173,7 +177,7 @@ func (p selectorPage) View() string {
 		)
 		return lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(colors.BorderDimFg).
+			BorderForeground(colors.BgLight).
 			Render(container)
 	}
 
@@ -188,7 +192,7 @@ func (p selectorPage) View() string {
 		)
 		return lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(colors.BorderDimFg).
+			BorderForeground(colors.BgLight).
 			Render(container)
 	}
 

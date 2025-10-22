@@ -710,7 +710,7 @@ func (p recordConfigPage) create() tea.Cmd {
 		return cmd
 	}
 
-	return p.hooks.create(p.cfg.serverURL, d, p, p.prevPage(), p.cfg.authClient)
+	return p.hooks.create(p.cfg.apiEndpoint, d, p, p.prevPage(), p.cfg.authClient)
 }
 
 func (p recordConfigPage) tarActCreate() (recordRequestData, tea.Cmd) {
@@ -780,7 +780,7 @@ func (p recordConfigPage) update() tea.Cmd {
 		return cmd
 	}
 
-	return p.hooks.update(p.cfg.serverURL, "", d, p, p.prevPage(), p.cfg.authClient)
+	return p.hooks.update(p.cfg.apiEndpoint, "", d, p, p.prevPage(), p.cfg.authClient)
 }
 
 func (p recordConfigPage) tarActUpdate() (recordRequestData, tea.Cmd) {

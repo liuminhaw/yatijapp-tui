@@ -276,7 +276,7 @@ func (m signupPage) signup() tea.Cmd {
 			Email:    email,
 			Password: password,
 		}
-		err := request.Register(m.cfg.serverURL)
+		err := request.Register(m.cfg.apiEndpoint)
 		if err != nil {
 			return err
 		}
@@ -298,7 +298,7 @@ func (m signupPage) activate() tea.Cmd {
 		}
 
 		request := data.UserTokenRequest{Token: token}
-		err := request.ActivateUser(m.cfg.serverURL)
+		err := request.ActivateUser(m.cfg.apiEndpoint)
 		if err != nil {
 			return err
 		}
@@ -318,7 +318,7 @@ func (m signupPage) activate() tea.Cmd {
 			Email:    email,
 			Password: password,
 		}
-		if err := signinReq.Signin(m.cfg.serverURL, m.cfg.authClient.TokenPath); err != nil {
+		if err := signinReq.Signin(m.cfg.apiEndpoint, m.cfg.authClient.TokenPath); err != nil {
 			var le data.UnauthorizedApiDataErr
 			if errors.As(err, &le) {
 				m.cfg.logger.Error(
