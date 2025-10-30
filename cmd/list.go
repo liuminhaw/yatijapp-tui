@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/paginator"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,7 +19,7 @@ import (
 )
 
 type listHooks struct {
-	loadAll func(serverURL, srcUUID, msg, src string, client *authclient.AuthClient) tea.Cmd
+	loadAll func(info data.ListRequestInfo, msg, src string, client *authclient.AuthClient) tea.Cmd
 	load    func(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Cmd
 	delete  func(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd
 	update  func(
@@ -35,9 +34,7 @@ type listPage struct {
 	cfg    config
 	helper bool
 
-	records    []yatijappRecord
-	paginator  paginator.Model
-	selected   int
+	selection  recordsSelection
 	hooks      listHooks
 	recordType data.RecordType
 
@@ -60,7 +57,7 @@ type listPage struct {
 func newListPage(cfg config, termSize style.ViewSize, prev tea.Model) listPage {
 	return listPage{
 		cfg:         cfg,
-		paginator:   style.NewPaginator(10),
+		selection:   newRecordsSelection(10),
 		width:       termSize.Width,
 		height:      termSize.Height,
 		spinner:     spinner.New(spinner.WithSpinner(spinner.Line)),
@@ -131,11 +128,12 @@ func (l listPage) Init() tea.Cmd {
 	return tea.Batch(
 		l.spinner.Tick,
 		l.hooks.loadAll(
-			l.cfg.apiEndpoint,
-			l.src[l.recordType.GetParentType()].UUID,
-			"",
-			"list",
-			l.cfg.authClient,
+			data.ListRequestInfo{
+				ServerURL:    l.cfg.apiEndpoint,
+				SrcUUID:      l.src[l.recordType.GetParentType()].UUID,
+				QueryStrings: l.selection.query,
+			},
+			"", "list", l.cfg.authClient,
 		),
 	)
 }
@@ -189,40 +187,26 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return l, tea.Quit
 		case "up", "k":
 			l.clearMsg()
-			if l.selected > 0 {
-				l.selected--
-				start, _ := l.paginator.GetSliceBounds(len(l.records))
-				if l.selected < start {
-					l.paginator.PrevPage()
-				}
-			}
+			return l, l.selection.prev()
 		case "down", "j":
 			l.clearMsg()
-			if l.selected < len(l.records)-1 {
-				l.selected++
-				_, end := l.paginator.GetSliceBounds(len(l.records))
-				if l.selected >= end {
-					l.paginator.NextPage()
-				}
-			}
+			return l, l.selection.next()
 		case "right", "l":
 			l.clearMsg()
-			if l.paginator.OnLastPage() {
-				break
-			}
-			l.paginator.NextPage()
-			l.selected, _ = l.paginator.GetSliceBounds(len(l.records))
+			return l, l.selection.nextPage()
 		case "left", "h":
 			l.clearMsg()
-			if l.paginator.OnFirstPage() {
-				break
-			}
-			l.paginator.PrevPage()
-			l.selected, _ = l.paginator.GetSliceBounds(len(l.records))
+			return l, l.selection.prevPage()
 		case "enter":
-			if len(l.records) > 0 {
+			if len(l.selection.records) > 0 {
+				selected := l.selection.current()
+				if selected == nil {
+					l.error = errors.New("no session selected on enter key press")
+					return l, nil
+				}
+
 				if l.recordType == data.RecordTypeSession {
-					session := l.records[l.selected].(data.Session)
+					session := selected.(data.Session)
 					if session.EndsAt.Valid {
 						return l, nil
 					}
@@ -231,9 +215,9 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						l.cfg.apiEndpoint,
 						"Session ended",
 						recordRequestData{
-							uuid:       l.records[l.selected].GetUUID(),
+							uuid:       selected.GetUUID(),
 							endsAt:     sql.NullTime{Valid: true, Time: time.Now()},
-							actionUUID: l.records[l.selected].GetParentsUUID()[data.RecordTypeAction],
+							actionUUID: selected.GetParentsUUID()[data.RecordTypeAction],
 						},
 						l, l,
 						l.cfg.authClient,
@@ -241,7 +225,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					popupModel = model.NewAlert(
 						"Confirm End Session",
 						"confirmation",
-						[]string{"Proceed to end session \"" + l.records[l.selected].GetTitle() + "\"?"},
+						[]string{"Proceed to end session \"" + selected.GetTitle() + "\"?"},
 						[]string{""},
 						60,
 						map[string]tea.Cmd{"confirm": updateCmd, "cancel": cancelPopupCmd},
@@ -250,7 +234,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					l.popup = l.popupModels[len(l.popupModels)-1].View()
 					return l, confirmationCmd
 				}
-				return l, switchToRecordsCmd(l.records[l.selected])
+				return l, switchToRecordsCmd(selected)
 			}
 		case "<":
 			if l.error != nil {
@@ -259,13 +243,19 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return l, switchToPreviousCmd(l.prev)
 		case "v":
-			if len(l.records) > 0 {
-				return l, switchToViewCmd(l.recordType, l.records[l.selected].GetUUID())
+			if l.selection.hasRecords() {
+				return l, switchToViewCmd(l.recordType, l.selection.current().GetUUID())
 			}
 		case "e":
-			if len(l.records) > 0 {
+			if l.selection.hasRecords() {
+				selected := l.selection.current()
+				if selected == nil {
+					l.error = errors.New("no session selected on enter key press")
+					return l, nil
+				}
+
 				if l.recordType == data.RecordTypeSession {
-					session := l.records[l.selected].(data.Session)
+					session := selected.(data.Session)
 					if !session.EndsAt.Valid {
 						popupModel = model.NewAlert(
 							"Edit Session Not Allowed",
@@ -282,32 +272,33 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				l.loading = true
 				l.clearMsg()
-				return l, l.hooks.load(l.cfg.apiEndpoint, l.records[l.selected].GetUUID(), "", l.cfg.authClient)
+				return l, l.hooks.load(l.cfg.apiEndpoint, selected.GetUUID(), "", l.cfg.authClient)
 			}
 		case "d":
-			if len(l.records) == 0 {
+			selected := l.selection.current()
+			if selected == nil {
 				return l, nil
 			}
 
 			var prompts, warnings []string
 			switch l.recordType {
 			case data.RecordTypeTarget:
-				prompts = []string{"Proceed to delete target \"" + l.records[l.selected].GetTitle() + "\"?"}
+				prompts = []string{"Proceed to delete target \"" + selected.GetTitle() + "\"?"}
 				warnings = []string{"All actions and sessions under this target will be deleted as well."}
 			case data.RecordTypeAction:
-				prompts = []string{"Proceed to delete action \"" + l.records[l.selected].GetTitle() + "\"?"}
+				prompts = []string{"Proceed to delete action \"" + selected.GetTitle() + "\"?"}
 				warnings = []string{"All sessions under this action will be deleted as well."}
 			case data.RecordTypeSession:
-				if l.records[l.selected].GetStatus() == "completed" {
+				if selected.GetStatus() == "completed" {
 					prompts = []string{
 						"Proceed to delete session",
-						"\"" + l.records[l.selected].GetTitle() + "\"?",
+						"\"" + selected.GetTitle() + "\"?",
 					}
 				} else {
-					prompts = []string{"Proceed to delete session \"" + l.records[l.selected].GetTitle() + "\"?"}
+					prompts = []string{"Proceed to delete session \"" + selected.GetTitle() + "\"?"}
 				}
 			}
-			deleteCmd := l.hooks.delete(l.cfg.apiEndpoint, l.records[l.selected].GetUUID(), l.cfg.authClient)
+			deleteCmd := l.hooks.delete(l.cfg.apiEndpoint, selected.GetUUID(), l.cfg.authClient)
 			popupModel = model.NewAlert(
 				"Confirm Deletion", "confirmation", prompts, warnings, 60,
 				map[string]tea.Cmd{"confirm": deleteCmd, "cancel": cancelPopupCmd},
@@ -320,11 +311,12 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+r":
 			l.clearMsg()
 			return l, l.hooks.loadAll(
-				l.cfg.apiEndpoint,
-				l.src[l.recordType.GetParentType()].UUID,
-				"Records refreshed",
-				"list",
-				l.cfg.authClient,
+				data.ListRequestInfo{
+					ServerURL:    l.cfg.apiEndpoint,
+					SrcUUID:      l.src[l.recordType.GetParentType()].UUID,
+					QueryStrings: l.selection.query,
+				},
+				"Records refreshed", "list", l.cfg.authClient,
 			)
 		}
 	case cancelPopupMsg:
@@ -367,26 +359,20 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l.loading = true
 		l.clearMsg()
 		return l, l.hooks.loadAll(
-			l.cfg.apiEndpoint,
-			l.src.UUID(l.recordType.GetParentType()),
-			"",
-			"list",
-			l.cfg.authClient,
+			data.ListRequestInfo{
+				ServerURL:    l.cfg.apiEndpoint,
+				SrcUUID:      l.src.UUID(l.recordType.GetParentType()),
+				QueryStrings: l.selection.query,
+			},
+			"", "list", l.cfg.authClient,
 		)
 	case allRecordsLoadedMsg:
+		// l.cfg.logger.Info("all records loaded msg received", slog.String("src", msg.src))
 		if msg.src != "list" {
 			break
 		}
 		l.msg = msg.msg
-		l.records = msg.records
-		l.paginator.SetTotalPages(len(l.records))
-		if l.paginator.Page > l.paginator.TotalPages-1 {
-			l.paginator.Page = l.paginator.TotalPages - 1
-		}
-		_, end := l.paginator.GetSliceBounds(len(l.records))
-		if l.selected >= end && l.selected > 0 {
-			l.selected = end - 1
-		}
+		l.selection.setRecords(msg.metadata, msg.records, l.cfg.logger)
 		l.loading = false
 	case getRecordLoadedMsg:
 		l.loading = false
@@ -400,11 +386,12 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		l.clearMsg()
 		return l, l.hooks.loadAll(
-			l.cfg.apiEndpoint,
-			l.src.UUID(l.recordType.GetParentType()),
-			string(msg),
-			"list",
-			l.cfg.authClient,
+			data.ListRequestInfo{
+				ServerURL:    l.cfg.apiEndpoint,
+				SrcUUID:      l.src.UUID(l.recordType.GetParentType()),
+				QueryStrings: l.selection.query,
+			},
+			string(msg), "list", l.cfg.authClient,
 		)
 	case confirmationMsg:
 		l.loading = false
@@ -413,7 +400,24 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l.clearMsg()
 		l.cfg.logger.Info("api success", slog.Any("src", l.src))
 		return l, l.hooks.loadAll(
-			l.cfg.apiEndpoint, l.src.UUID(l.recordType.GetParentType()), msg.msg, "list", l.cfg.authClient,
+			data.ListRequestInfo{
+				ServerURL:    l.cfg.apiEndpoint,
+				SrcUUID:      l.src.UUID(l.recordType.GetParentType()),
+				QueryStrings: l.selection.query,
+			},
+			msg.msg, "list", l.cfg.authClient,
+		)
+	case loadMoreRecordsMsg:
+		// l.cfg.logger.Info("load more records for list page")
+		l.loading = true
+		l.clearMsg()
+		return l, l.hooks.loadAll(
+			data.ListRequestInfo{
+				ServerURL:    l.cfg.apiEndpoint,
+				SrcUUID:      l.src.UUID(l.recordType.GetParentType()),
+				QueryStrings: l.selection.query,
+			},
+			"", "list", l.cfg.authClient,
 		)
 	case data.UnauthorizedApiDataErr:
 		l.cfg.logger.Error(
@@ -441,7 +445,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return l, cmd
 	}
 
-	l.paginator, cmd = l.paginator.Update(msg)
+	l.selection.p, cmd = l.selection.p.Update(msg)
 	cmds = append(cmds, cmd)
 	if len(l.popupModels) > 0 {
 		lastIndex := len(l.popupModels) - 1
@@ -502,18 +506,18 @@ func (l listPage) View() string {
 	helperView := l.listPageHelper(viewWidth)
 
 	var content strings.Builder
-	start, end := l.paginator.GetSliceBounds(len(l.records))
-	for i, record := range l.records[start:end] {
+	start, end := l.selection.p.GetSliceBounds(len(l.selection.records))
+	for i, record := range l.selection.records[start:end] {
 		content.WriteString(
 			record.ListItemView(
 				l.src[l.recordType.GetParentType()] == data.RecordParent{},
-				i+start == l.selected,
+				i+start == l.selection.selected,
 				viewWidth,
 			),
 		)
 	}
 
-	for i := len(l.records[start:end]); i < l.paginator.PerPage; i++ {
+	for i := len(l.selection.records[start:end]); i < l.selection.p.PerPage; i++ {
 		content.WriteString("\n")
 	}
 
@@ -523,11 +527,11 @@ func (l listPage) View() string {
 		lipgloss.Center,
 		title,
 		contentView,
-		l.paginator.View(),
+		l.selection.p.View(),
 	)
 
-	if len(l.records) > 0 {
-		selected := l.records[l.selected]
+	if len(l.selection.records) > 0 {
+		selected := l.selection.current()
 		detailView := data.ListPageDetailView(
 			selected.ListItemDetailView(
 				l.src[l.recordType.GetParentType()] == data.RecordParent{},
@@ -568,8 +572,8 @@ func (l *listPage) helperPopup(width int) {
 	order := []string{"<", "↑/↓", "q", "n", "v", "e", "d", "f", "<C-r>", "?"}
 
 	var enterValue string
-	if l.recordType == data.RecordTypeSession && len(l.records) > 0 &&
-		!l.records[l.selected].(data.Session).EndsAt.Valid {
+	if l.recordType == data.RecordTypeSession && l.selection.hasRecords() &&
+		!l.selection.current().(data.Session).EndsAt.Valid {
 		enterValue = "End session"
 	} else if l.recordType != data.RecordTypeSession {
 		enterValue = "Select"
@@ -599,8 +603,8 @@ func (l listPage) listPageHelper(width int) string {
 	}
 
 	enterValue := ""
-	if l.recordType == data.RecordTypeSession && len(l.records) > 0 &&
-		!l.records[l.selected].(data.Session).EndsAt.Valid {
+	if l.recordType == data.RecordTypeSession && l.selection.hasRecords() &&
+		!l.selection.current().(data.Session).EndsAt.Valid {
 		enterValue = "end session"
 	} else if l.recordType != data.RecordTypeSession {
 		enterValue = "select"

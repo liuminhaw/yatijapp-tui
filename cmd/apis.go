@@ -33,9 +33,10 @@ type yatijappRecord interface {
 
 type (
 	allRecordsLoadedMsg struct {
-		records []yatijappRecord
-		src     string
-		msg     string
+		metadata data.Metadata
+		records  []yatijappRecord
+		src      string
+		msg      string
 	}
 	getRecordLoadedMsg struct {
 		record yatijappRecord
@@ -68,64 +69,83 @@ type (
 		source   tea.Model
 		redirect tea.Model
 	}
+
+	loadMoreRecordsMsg struct{}
 )
 
-func loadAllTargets(serverURL, nilUUID, msg, src string, client *authclient.AuthClient) tea.Cmd {
+var loadMoreRecordsCmd = func() tea.Msg { return loadMoreRecordsMsg{} }
+
+func loadAllTargets(
+	info data.ListRequestInfo,
+	msg, src string,
+	client *authclient.AuthClient,
+) tea.Cmd {
 	return func() tea.Msg {
-		targets, err := data.ListTargets(serverURL, client)
+		resp, err := data.ListTargets(info, client)
 		if err != nil {
 			return err
 		}
 
-		records := make([]yatijappRecord, len(targets))
-		for i, target := range targets {
+		records := make([]yatijappRecord, len(resp.Targets))
+		for i, target := range resp.Targets {
 			records[i] = target
 		}
 
 		return allRecordsLoadedMsg{
-			records: records,
-			src:     src,
-			msg:     msg,
+			metadata: resp.Metadata,
+			records:  records,
+			src:      src,
+			msg:      msg,
 		}
 	}
 }
 
-func loadAllActions(serverURL, srcUUID, msg, src string, client *authclient.AuthClient) tea.Cmd {
+func loadAllActions(
+	info data.ListRequestInfo,
+	msg, src string,
+	client *authclient.AuthClient,
+) tea.Cmd {
 	return func() tea.Msg {
-		actions, err := data.ListActions(serverURL, client, srcUUID)
+		resp, err := data.ListActions(info, client)
 		if err != nil {
 			return err
 		}
 
-		records := make([]yatijappRecord, len(actions))
-		for i, action := range actions {
+		records := make([]yatijappRecord, len(resp.Actions))
+		for i, action := range resp.Actions {
 			records[i] = action
 		}
 
 		return allRecordsLoadedMsg{
-			records: records,
-			src:     src,
-			msg:     msg,
+			metadata: resp.Metadata,
+			records:  records,
+			src:      src,
+			msg:      msg,
 		}
 	}
 }
 
-func loadAllSessions(serverURL, srcUUID, msg, src string, client *authclient.AuthClient) tea.Cmd {
+func loadAllSessions(
+	info data.ListRequestInfo,
+	msg, src string,
+	client *authclient.AuthClient,
+) tea.Cmd {
 	return func() tea.Msg {
-		sessions, err := data.ListSessions(serverURL, client, srcUUID)
+		resp, err := data.ListSessions(info, client)
 		if err != nil {
 			return err
 		}
 
-		records := make([]yatijappRecord, len(sessions))
-		for i, session := range sessions {
+		records := make([]yatijappRecord, len(resp.Sessions))
+		for i, session := range resp.Sessions {
 			records[i] = session
 		}
 
 		return allRecordsLoadedMsg{
-			records: records,
-			src:     src,
-			msg:     msg,
+			metadata: resp.Metadata,
+			records:  records,
+			src:      src,
+			msg:      msg,
 		}
 	}
 }

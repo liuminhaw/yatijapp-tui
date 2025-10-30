@@ -15,7 +15,7 @@ import (
 )
 
 type selectorHooks struct {
-	loadAll func(serverURL, srcUUID, msg, src string, client *authclient.AuthClient) tea.Cmd
+	loadAll func(info data.ListRequestInfo, msg, src string, client *authclient.AuthClient) tea.Cmd
 }
 
 type selectorPage struct {
@@ -23,8 +23,6 @@ type selectorPage struct {
 
 	parentUUID string
 	selection  recordsSelection
-	// selection model.SelectorModel
-	// text      *components.TextComponent
 
 	hooks      selectorHooks
 	recordType data.RecordType
@@ -47,10 +45,8 @@ func newSelectorPage(
 	prev tea.Model,
 ) selectorPage {
 	return selectorPage{
-		cfg: cfg,
-		selection: recordsSelection{
-			p: style.NewPaginator(6),
-		},
+		cfg:        cfg,
+		selection:  newRecordsSelection(6),
 		parentUUID: parentUUID,
 		width:      termSize.Width,
 		height:     termSize.Height,
@@ -87,7 +83,10 @@ func (p selectorPage) Init() tea.Cmd {
 			return allRecordsLoadedMsg{src: "selector"}
 		}
 	} else {
-		cmd = p.hooks.loadAll(p.cfg.apiEndpoint, p.parentUUID, "", "selector", p.cfg.authClient)
+		cmd = p.hooks.loadAll(
+			data.ListRequestInfo{ServerURL: p.cfg.apiEndpoint, SrcUUID: p.parentUUID},
+			"", "selector", p.cfg.authClient,
+		)
 	}
 	return tea.Batch(p.spinner.Tick, cmd)
 }
@@ -125,8 +124,7 @@ func (p selectorPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.src != "selector" {
 			break
 		}
-		p.selection.records = msg.records
-		p.selection.p.SetTotalPages(len(p.selection.records))
+		p.selection.setRecords(msg.metadata, msg.records, p.cfg.logger)
 		p.loading = false
 	case data.UnauthorizedApiDataErr:
 		p.cfg.logger.Error(

@@ -128,6 +128,10 @@ func newRecordConfigPage(
 			name.SetValue(record.GetTitle())
 		}
 
+		due.Validate = validator.MultipleValidators(
+			validator.ValidateDateTime(validator.ValidDateFormats),
+		)
+
 		dueDate, dueDateValid := record.GetDueDate()
 		if dueDateValid {
 			due.SetValue(dueDate.Format("2006-01-02"))

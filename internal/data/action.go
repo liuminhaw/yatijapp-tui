@@ -16,27 +16,26 @@ type ListActionsResponse struct {
 }
 
 func ListActions(
-	serverURL string,
+	info ListRequestInfo,
 	client *authclient.AuthClient,
-	srcUUID string,
-) ([]Action, error) {
-	var path string
+) (ListActionsResponse, error) {
+	var reqUrl string
 	var err error
-	if srcUUID == "" {
-		path, err = url.JoinPath(serverURL, "v1", "actions")
+	if info.SrcUUID == "" {
+		reqUrl, err = info.requestUrl("/v1/actions")
 	} else {
-		path, err = url.JoinPath(serverURL, "v1", "targets", srcUUID, "actions")
+		reqUrl, err = info.requestUrl("/v1/targets/" + info.SrcUUID + "/actions")
 	}
 	if err != nil {
-		return []Action{}, UnexpectedApiDataErr{
+		return ListActionsResponse{}, UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create URL path for GET Target Actions",
+			Msg: "Failed to create request URL for GET Actions",
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodGet, path, nil)
+	req, err := http.NewRequest(http.MethodGet, reqUrl, nil)
 	if err != nil {
-		return []Action{}, UnauthorizedApiDataErr{
+		return ListActionsResponse{}, UnauthorizedApiDataErr{
 			Err: err,
 			Msg: "Failed to create GET request for Actions",
 		}
@@ -44,20 +43,20 @@ func ListActions(
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return []Action{}, respErrorCheck(err, "API request error: GET Actions")
+		return ListActionsResponse{}, respErrorCheck(err, "API request error: GET Actions")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return []Action{}, UnexpectedApiDataErr{
+			return ListActionsResponse{}, UnexpectedApiDataErr{
 				Err: err,
 				Msg: "API error response decode failure",
 			}
 		}
 
-		return []Action{}, UnauthorizedApiDataErr{
+		return ListActionsResponse{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -66,13 +65,13 @@ func ListActions(
 
 	var responseData ListActionsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return []Action{}, UnexpectedApiDataErr{
+		return ListActionsResponse{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API response decode error",
 		}
 	}
 
-	return responseData.Actions, nil
+	return responseData, nil
 }
 
 type GetActionResponse struct {

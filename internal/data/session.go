@@ -18,27 +18,26 @@ type ListSessionsResponse struct {
 }
 
 func ListSessions(
-	serverURL string,
+	info ListRequestInfo,
 	client *authclient.AuthClient,
-	srcUUID string,
-) ([]Session, error) {
-	var path string
+) (ListSessionsResponse, error) {
+	var reqUrl string
 	var err error
-	if srcUUID == "" {
-		path, err = url.JoinPath(serverURL, "v1", "sessions")
+	if info.SrcUUID == "" {
+		reqUrl, err = info.requestUrl("/v1/sessions")
 	} else {
-		path, err = url.JoinPath(serverURL, "v1", "actions", srcUUID, "sessions")
+		reqUrl, err = info.requestUrl("/v1/actions/" + info.SrcUUID + "/sessions")
 	}
 	if err != nil {
-		return []Session{}, UnexpectedApiDataErr{
+		return ListSessionsResponse{}, UnexpectedApiDataErr{
 			Err: err,
-			Msg: "Failed to create URL path for GET Action Sessions",
+			Msg: "Failed to create request URL for GET Sessions",
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodGet, path, nil)
+	req, err := http.NewRequest(http.MethodGet, reqUrl, nil)
 	if err != nil {
-		return []Session{}, UnauthorizedApiDataErr{
+		return ListSessionsResponse{}, UnauthorizedApiDataErr{
 			Err: err,
 			Msg: "Failed to create GET request for Sessions",
 		}
@@ -46,20 +45,20 @@ func ListSessions(
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return []Session{}, respErrorCheck(err, "API request error: GET Sessions")
+		return ListSessionsResponse{}, respErrorCheck(err, "API request error: GET Sessions")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return []Session{}, UnexpectedApiDataErr{
+			return ListSessionsResponse{}, UnexpectedApiDataErr{
 				Err: err,
 				Msg: "API error response decode failure",
 			}
 		}
 
-		return []Session{}, UnauthorizedApiDataErr{
+		return ListSessionsResponse{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -68,13 +67,13 @@ func ListSessions(
 
 	var responseData ListSessionsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return []Session{}, UnexpectedApiDataErr{
+		return ListSessionsResponse{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API response decode failure",
 		}
 	}
 
-	return responseData.Sessions, nil
+	return responseData, nil
 }
 
 type GetSessionResponse struct {

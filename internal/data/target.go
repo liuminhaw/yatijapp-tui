@@ -15,16 +15,23 @@ type ListTargetsResponse struct {
 	Error    string   `json:"error,omitempty"`
 }
 
-func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, error) {
+func ListTargets(
+	info ListRequestInfo,
+	client *authclient.AuthClient,
+) (ListTargetsResponse, error) {
 	// time.Sleep(1 * time.Second) // Simulate a delay for loading targets
 
-	req, err := http.NewRequest(
-		http.MethodGet,
-		fmt.Sprintf("%s/v1/targets", serverURL),
-		nil,
-	)
+	reqUrl, err := info.requestUrl("/v1/targets")
 	if err != nil {
-		return []Target{}, UnexpectedApiDataErr{
+		return ListTargetsResponse{}, UnexpectedApiDataErr{
+			Err: err,
+			Msg: "Failed to create request URL for GET Targets",
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodGet, reqUrl, nil)
+	if err != nil {
+		return ListTargetsResponse{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "Failed to create GET request for Targets",
 		}
@@ -32,20 +39,20 @@ func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, err
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return []Target{}, respErrorCheck(err, "API request error: GET Targets")
+		return ListTargetsResponse{}, respErrorCheck(err, "API request error: GET Targets")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var responseErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
-			return []Target{}, UnexpectedApiDataErr{
+			return ListTargetsResponse{}, UnexpectedApiDataErr{
 				Err: err,
 				Msg: "API error response decode failure",
 			}
 		}
 
-		return []Target{}, UnauthorizedApiDataErr{
+		return ListTargetsResponse{}, UnauthorizedApiDataErr{
 			Status: resp.StatusCode,
 			Err:    responseErr,
 			Msg:    responseErr.Error(),
@@ -54,13 +61,13 @@ func ListTargets(serverURL string, client *authclient.AuthClient) ([]Target, err
 
 	var responseData ListTargetsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-		return []Target{}, UnexpectedApiDataErr{
+		return ListTargetsResponse{}, UnexpectedApiDataErr{
 			Err: err,
 			Msg: "API response decode error",
 		}
 	}
 
-	return responseData.Targets, nil
+	return responseData, nil
 }
 
 type GetTargetResponse struct {
