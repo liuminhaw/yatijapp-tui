@@ -179,6 +179,8 @@ func (rs *recordsSelection) prev() tea.Cmd {
 		if rs.metadata.CurrentPage != rs.metadata.FirstPage && rs.selected == 0 {
 			rs.query["page"] = strconv.Itoa(rs.metadata.CurrentPage - 1)
 			return loadMoreRecords("prev")
+		} else if rs.selected == 0 {
+			return nil
 		}
 
 		rs.selected--
