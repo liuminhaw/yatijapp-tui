@@ -227,7 +227,7 @@ func (p selectorPage) View() string {
 		lipgloss.NewStyle().
 			Width(70).
 			AlignHorizontal(lipgloss.Center).
-			Render(p.selection.p.View()),
+			Render(p.selection.view()),
 		helper,
 	)
 

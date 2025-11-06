@@ -528,7 +528,7 @@ func (l listPage) View() string {
 		lipgloss.Center,
 		title,
 		contentView,
-		l.selection.p.View(),
+		l.selection.view(),
 	)
 
 	if len(l.selection.records) > 0 {
