@@ -37,6 +37,7 @@ type (
 		records  []yatijappRecord
 		src      string
 		msg      string
+		events   []string
 	}
 	getRecordLoadedMsg struct {
 		record yatijappRecord
@@ -70,10 +71,16 @@ type (
 		redirect tea.Model
 	}
 
-	loadMoreRecordsMsg struct{}
+	loadMoreRecordsMsg struct {
+		direction string
+	}
 )
 
-var loadMoreRecordsCmd = func() tea.Msg { return loadMoreRecordsMsg{} }
+func loadMoreRecords(direction string) tea.Cmd {
+	return func() tea.Msg {
+		return loadMoreRecordsMsg{direction: direction}
+	}
+}
 
 func loadAllTargets(
 	info data.ListRequestInfo,
@@ -96,6 +103,7 @@ func loadAllTargets(
 			records:  records,
 			src:      src,
 			msg:      msg,
+			events:   info.Events,
 		}
 	}
 }
@@ -121,6 +129,7 @@ func loadAllActions(
 			records:  records,
 			src:      src,
 			msg:      msg,
+			events:   info.Events,
 		}
 	}
 }
@@ -146,6 +155,7 @@ func loadAllSessions(
 			records:  records,
 			src:      src,
 			msg:      msg,
+			events:   info.Events,
 		}
 	}
 }

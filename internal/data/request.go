@@ -6,6 +6,7 @@ type ListRequestInfo struct {
 	ServerURL    string
 	QueryStrings map[string]string
 	SrcUUID      string
+	Events       []string
 }
 
 func (i ListRequestInfo) requestUrl(path string) (string, error) {

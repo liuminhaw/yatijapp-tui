@@ -124,7 +124,7 @@ func (p selectorPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.src != "selector" {
 			break
 		}
-		p.selection.setRecords(msg.metadata, msg.records, p.cfg.logger)
+		p.selection.setRecords(msg, p.cfg.logger)
 		p.loading = false
 	case data.UnauthorizedApiDataErr:
 		p.cfg.logger.Error(

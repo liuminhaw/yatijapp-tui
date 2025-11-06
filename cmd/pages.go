@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 
 	"github.com/charmbracelet/bubbles/paginator"
@@ -127,41 +127,51 @@ func newRecordsSelection(pageSize int) recordsSelection {
 	}
 }
 
-func (rs *recordsSelection) setRecords(
-	metadata data.Metadata,
-	records []yatijappRecord,
-	logger *slog.Logger,
-) {
-	// offset := 0
-	rs.metadata = metadata
+func (rs *recordsSelection) setRecords(msg allRecordsLoadedMsg, logger *slog.Logger) {
+	rs.metadata = msg.metadata
+	rs.records = msg.records
 
-	rs.records = records
-	logger.Info("Setting records", slog.String("metadata", fmt.Sprintf("%+v", metadata)))
-	if metadata.CurrentPage == metadata.FirstPage {
+	rs.p.SetTotalPages(len(rs.records))
+	totalPage := rs.p.TotalPages
+	start, end := rs.p.GetSliceBounds(len(rs.records))
+
+	if slices.Contains(msg.events, "prev") {
+		rs.p.Page = rs.p.TotalPages - 1
+		rs.selected = end - rs.p.PerPage
+	}
+	if slices.Contains(msg.events, "next") {
+		rs.p.Page = 0
+		rs.selected = start
+	}
+
+	if msg.metadata.CurrentPage == msg.metadata.FirstPage && rs.p.Page == 0 {
 		if rs.selected > rs.offset {
 			rs.selected -= rs.offset
 		} else if rs.selected == rs.offset {
 			rs.selected--
 		}
 	}
-	if metadata.CurrentPage != metadata.FirstPage {
+	if msg.metadata.CurrentPage != msg.metadata.FirstPage {
 		rs.records = append(make([]yatijappRecord, rs.offset), rs.records...)
 		rs.p.Page++
+		rs.p.TotalPages++
 		if rs.selected < rs.offset {
 			rs.selected += rs.offset
 		}
 	}
 
-	rs.p.SetTotalPages(len(rs.records))
-	totalPage := rs.p.TotalPages
-	if metadata.CurrentPage != metadata.LastPage {
+	if msg.metadata.CurrentPage != msg.metadata.LastPage {
 		rs.p.TotalPages++
 	}
+	logger.Info(
+		"Records page",
+		slog.Int("page", rs.p.Page),
+		slog.Int("total_pages", rs.p.TotalPages),
+	)
 
 	if rs.p.Page > totalPage-1 {
 		rs.p.Page = totalPage - 1
 	}
-	start, end := rs.p.GetSliceBounds(len(rs.records))
 	if rs.selected > end && rs.selected > 0 {
 		rs.selected = end - 1
 	} else if rs.selected == end && rs.selected > 0 {
@@ -178,7 +188,7 @@ func (rs *recordsSelection) prev() tea.Cmd {
 			// logger.Info("Loading more records for prev", slog.String("action", "prev"))
 			rs.query["page"] = strconv.Itoa(rs.metadata.CurrentPage - 1)
 			// logger.Info("Call load more records cmd")
-			return loadMoreRecordsCmd
+			return loadMoreRecords("prev")
 		}
 
 		rs.selected--
@@ -209,7 +219,7 @@ func (rs *recordsSelection) next() tea.Cmd {
 	if rs.metadata.CurrentPage != rs.metadata.LastPage && rs.p.Page == rs.p.TotalPages-2 {
 		// logger.Info("Loading more records for next", slog.String("action", "next"))
 		rs.query["page"] = strconv.Itoa(rs.metadata.CurrentPage + 1)
-		return loadMoreRecordsCmd
+		return loadMoreRecords("next")
 	}
 
 	return nil
@@ -225,7 +235,7 @@ func (rs *recordsSelection) nextPage() tea.Cmd {
 	if rs.metadata.CurrentPage != rs.metadata.LastPage && rs.p.Page == rs.p.TotalPages-2 {
 		// logger.Info("Loading more records for next page", slog.String("action", "next page"))
 		rs.query["page"] = strconv.Itoa(rs.metadata.CurrentPage + 1)
-		return loadMoreRecordsCmd
+		return loadMoreRecords("next")
 	}
 	rs.p.NextPage()
 	rs.selected, _ = rs.p.GetSliceBounds(len(rs.records))
@@ -243,7 +253,7 @@ func (rs *recordsSelection) prevPage() tea.Cmd {
 	if rs.metadata.CurrentPage != rs.metadata.FirstPage && rs.p.Page == 1 {
 		// logger.Info("Loading more records for prev page", slog.String("action", "prev page"))
 		rs.query["page"] = strconv.Itoa(rs.metadata.CurrentPage - 1)
-		return loadMoreRecordsCmd
+		return loadMoreRecords("prev")
 	}
 	rs.p.PrevPage()
 	rs.selected, _ = rs.p.GetSliceBounds(len(rs.records))

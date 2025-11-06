@@ -372,7 +372,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		l.msg = msg.msg
-		l.selection.setRecords(msg.metadata, msg.records, l.cfg.logger)
+		l.selection.setRecords(msg, l.cfg.logger)
 		l.loading = false
 	case getRecordLoadedMsg:
 		l.loading = false
@@ -416,6 +416,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ServerURL:    l.cfg.apiEndpoint,
 				SrcUUID:      l.src.UUID(l.recordType.GetParentType()),
 				QueryStrings: l.selection.query,
+				Events:       []string{msg.direction},
 			},
 			"", "list", l.cfg.authClient,
 		)
