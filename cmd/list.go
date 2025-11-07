@@ -358,13 +358,16 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchToPreviousMsg:
 		l.loading = true
 		l.clearMsg()
-		return l, l.hooks.loadAll(
-			data.ListRequestInfo{
-				ServerURL:    l.cfg.apiEndpoint,
-				SrcUUID:      l.src.UUID(l.recordType.GetParentType()),
-				QueryStrings: l.selection.query,
-			},
-			"", "list", l.cfg.authClient,
+		return l, tea.Batch(
+			l.spinner.Tick,
+			l.hooks.loadAll(
+				data.ListRequestInfo{
+					ServerURL:    l.cfg.apiEndpoint,
+					SrcUUID:      l.src.UUID(l.recordType.GetParentType()),
+					QueryStrings: l.selection.query,
+				},
+				"", "list", l.cfg.authClient,
+			),
 		)
 	case allRecordsLoadedMsg:
 		// l.cfg.logger.Info("all records loaded msg received", slog.String("src", msg.src))
@@ -559,7 +562,7 @@ func (l *listPage) clearMsg() {
 func (l *listPage) helperPopup(width int) {
 	recordType := string(l.recordType)
 	items := map[string]string{
-		"<":     "Back to menu",
+		"<":     "Back",
 		"↑/↓":   "Navigate",
 		"q":     "Quit",
 		"n":     "New " + strings.ToLower(recordType),
@@ -597,7 +600,7 @@ func (l *listPage) helperPopup(width int) {
 
 func (l listPage) listPageHelper(width int) string {
 	content := []style.HelperContent{
-		{Key: "<", Action: "menu"},
+		{Key: "<", Action: "back"},
 		{Key: "↑/↓", Action: "navigate"},
 		{Key: "q", Action: "quit"},
 		{Key: "?", Action: "toggle helper"},

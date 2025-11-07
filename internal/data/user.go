@@ -14,7 +14,7 @@ type GetUserResponse struct {
 }
 
 func GetCurrentUser(serverURL string, client *authclient.AuthClient) (User, error) {
-	// time.Sleep(3 * time.Second) // Simulate a delay for loading targets
+	// time.Sleep(1 * time.Second) // Simulate a delay for loading targets
 
 	req, err := http.NewRequest(
 		http.MethodGet,

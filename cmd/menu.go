@@ -116,7 +116,7 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case switchToPreviousMsg:
 		m.loading = true
-		return m, m.loadLoginUser()
+		return m, tea.Batch(m.spinner.Tick, m.loadLoginUser())
 	case apiSuccessResponseMsg:
 		if isExactType[menuPage](msg.source) {
 			m.greeting = fmt.Sprintf("Welcome, %s", msg.msg)
