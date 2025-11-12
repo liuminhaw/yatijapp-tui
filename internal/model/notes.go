@@ -1,13 +1,33 @@
 package model
 
 import (
+	"bytes"
+	"embed"
 	"errors"
 	"os"
 	"os/exec"
+	"text/template"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
 )
+
+//go:embed templates/*.tmpl
+var noteTemplates embed.FS
+
+func render(filename string, data any) ([]byte, error) {
+	tpl, err := template.ParseFS(noteTemplates, "templates/"+filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var b bytes.Buffer
+	if err := tpl.Execute(&b, data); err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
+}
 
 type (
 	EditorFinishedMsg struct {
@@ -20,11 +40,31 @@ type NoteModel struct {
 	content string
 	focused bool
 
+	info struct {
+		record  data.RecordType
+		name    string
+		parents map[data.RecordType]string
+	}
+
 	err error
 }
 
-func NewNoteModel() *NoteModel {
-	return &NoteModel{}
+func NewNoteModel(
+	recordType data.RecordType,
+	name string,
+	parents map[data.RecordType]string,
+) *NoteModel {
+	return &NoteModel{
+		info: struct {
+			record  data.RecordType
+			name    string
+			parents map[data.RecordType]string
+		}{
+			record:  recordType,
+			name:    name,
+			parents: parents,
+		},
+	}
 }
 
 func (m *NoteModel) Init() tea.Cmd {
@@ -58,6 +98,22 @@ func (m *NoteModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.note = note
 			}
+
+			content, err := m.note.Read()
+			if err != nil {
+				m.err = errors.New("failed to read note content")
+				return m, nil
+			}
+
+			// Write default content if the note is empty
+			if len(content) == 0 {
+				c, err := m.defaultContent()
+				if err != nil {
+					m.err = errors.New(err.Error())
+				}
+				m.note.Write(c)
+			}
+
 			return m, openEditor(m.note.Path())
 		}
 	}
@@ -110,6 +166,36 @@ func (m *NoteModel) Error() string {
 		return m.err.Error()
 	}
 	return ""
+}
+
+func (m *NoteModel) defaultContent() ([]byte, error) {
+	var filename string
+	switch m.info.record {
+	case data.RecordTypeTarget:
+		filename = "note_target.tmpl"
+	case data.RecordTypeAction:
+		filename = "note_action.tmpl"
+	case data.RecordTypeSession:
+		filename = "note_session.tmpl"
+	default:
+		return []byte{}, nil
+	}
+
+	data := struct {
+		Name   string
+		Target string
+		Action string
+	}{
+		Name:   m.info.name,
+		Target: m.info.parents[data.RecordTypeTarget],
+		Action: m.info.parents[data.RecordTypeAction],
+	}
+	content, err := render(filename, data)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return content, nil
 }
 
 func openEditor(filepath string) tea.Cmd {

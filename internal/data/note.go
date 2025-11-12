@@ -40,6 +40,11 @@ func (n *Note) Read() ([]byte, error) {
 }
 
 func (n *Note) Write(content []byte) error {
+	_, err := n.file.Seek(0, 0)
+	if err != nil {
+		return err
+	}
+
 	if _, err := n.file.Write(content); err != nil {
 		return err
 	}
