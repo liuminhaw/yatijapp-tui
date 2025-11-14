@@ -111,7 +111,7 @@ func newRecordConfigPage(
 		formWidth,
 	)
 
-	note := model.NewNoteModel(recordType, record.GetTitle(), record.GetParentsTitle())
+	note := model.NewNoteModel()
 
 	// For actions, and sessions
 	parentTarget := components.NewText(
@@ -260,7 +260,7 @@ func newSessionConfigPage(
 	hiddens := make(map[string]string)
 	selectorFields := make(map[data.RecordType]int)
 
-	note := model.NewNoteModel(data.RecordTypeSession, record.GetTitle(), record.GetParentsTitle())
+	note := model.NewNoteModel()
 
 	parentTarget := components.NewText("", showSelectorMsg{selection: data.RecordTypeTarget})
 	parentTarget.ValidateFunc = validator.ValidateRequired("target is required")
