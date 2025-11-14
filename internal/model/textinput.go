@@ -71,10 +71,6 @@ func (t *TextInputWrapper) Clear() {
 	t.model.Err = nil
 }
 
-func (t *TextInputWrapper) InputModel() *textinput.Model {
-	return &t.model
-}
-
 func ValidateTextInputMatch(target *TextInputWrapper, msg string) textinput.ValidateFunc {
 	return func(input string) error {
 		if input != target.Value() {

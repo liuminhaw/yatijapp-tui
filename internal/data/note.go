@@ -50,10 +50,3 @@ func (n *Note) Write(content []byte) error {
 	}
 	return nil
 }
-
-func (n *Note) Remove() error {
-	if err := os.Remove(n.file.Name()); err != nil {
-		return err
-	}
-	return nil
-}

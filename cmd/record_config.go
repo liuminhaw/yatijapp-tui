@@ -111,25 +111,7 @@ func newRecordConfigPage(
 		formWidth,
 	)
 
-	// var recordParents map[data.RecordType]string
-	// if record != nil {
-	// 	recordParents = record.GetParentsTitle()
-	// } else {
-	// 	recordParents = make(map[data.RecordType]string)
-	// }
-	var note *model.NoteModel
-	cfg.logger.Info(
-		"creating note model",
-		slog.String("name value", name.Value()),
-		slog.String("name address", fmt.Sprintf("%p", &name)),
-	)
-	// note = model.NewNoteModel(recordType, &name, map[data.RecordType]string{})
-	nameWrapper := model.NewTextInputWrapper(name)
-	note = model.NewNoteModel(recordType, nil, nameWrapper)
-	// cfg.logger.Info(
-	// 	"created note model",
-	// 	slog.String("note input address", fmt.Sprintf("%p", note.Info.Input)),
-	// )
+	note := model.NewNoteModel(recordType, record.GetTitle(), record.GetParentsTitle())
 
 	// For actions, and sessions
 	parentTarget := components.NewText(
@@ -141,13 +123,9 @@ func newRecordConfigPage(
 	var uuid string
 	recordAction := cmdCreate
 	if record != nil {
-		// note = model.NewNoteModel(recordType, &name, record.GetParentsTitle())
-		note = model.NewNoteModel(recordType, record, nameWrapper)
-
 		if record.GetTitle() != "" {
 			recordAction = cmdUpdate
-			// name.SetValue(record.GetTitle())
-			nameWrapper.SetValue(record.GetTitle())
+			name.SetValue(record.GetTitle())
 		}
 
 		due.Validate = validator.MultipleValidators(
@@ -185,15 +163,9 @@ func newRecordConfigPage(
 
 		uuid = record.GetUUID()
 	}
-	cfg.logger.Info(
-		"create focusable",
-		slog.String("name value", name.Value()),
-		slog.String("name address", fmt.Sprintf("%p", &name)),
-	)
 	focusables = append(
 		focusables,
-		// model.NewTextInputWrapper(&name),
-		nameWrapper,
+		model.NewTextInputWrapper(name),
 		model.NewTextInputWrapper(due),
 		model.NewTextInputWrapper(description),
 		status,
@@ -288,18 +260,7 @@ func newSessionConfigPage(
 	hiddens := make(map[string]string)
 	selectorFields := make(map[data.RecordType]int)
 
-	// var recordParents map[data.RecordType]string
-	// if record != nil {
-	// 	recordParents = record.GetParentsTitle()
-	// } else {
-	// 	recordParents = make(map[data.RecordType]string)
-	// }
-	var note *model.NoteModel
-	note = model.NewNoteModel(
-		data.RecordTypeSession,
-		nil,
-		textinput.New(),
-	)
+	note := model.NewNoteModel(data.RecordTypeSession, record.GetTitle(), record.GetParentsTitle())
 
 	parentTarget := components.NewText("", showSelectorMsg{selection: data.RecordTypeTarget})
 	parentTarget.ValidateFunc = validator.ValidateRequired("target is required")
@@ -323,12 +284,6 @@ func newSessionConfigPage(
 	recordAction := cmdCreate
 	focused := 0
 	if record != nil {
-		note = model.NewNoteModel(
-			data.RecordTypeSession,
-			record,
-			textinput.New(),
-		)
-
 		if err := note.SetValue(record.GetNote()); err != nil {
 			return recordConfigPage{}, internalErrorMsg{
 				msg: "failed to load session note data",

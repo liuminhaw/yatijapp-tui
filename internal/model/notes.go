@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"errors"
-	"io/fs"
-	"maps"
 	"os"
 	"os/exec"
 	"text/template"
@@ -17,13 +15,11 @@ import (
 //go:embed templates/*.tmpl
 var noteTemplates embed.FS
 
-// func render(filename string, data any) ([]byte, error) {
-func (m *NoteModel) render(data any) ([]byte, error) {
-	// tpl, err := template.ParseFS(noteTemplates, "templates/"+filename)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	tpl := template.Must(template.New("note").Parse(m.content))
+func render(filename string, data any) ([]byte, error) {
+	tpl, err := template.ParseFS(noteTemplates, "templates/"+filename)
+	if err != nil {
+		return nil, err
+	}
 
 	var b bytes.Buffer
 	if err := tpl.Execute(&b, data); err != nil {
@@ -39,59 +35,35 @@ type (
 	}
 )
 
-type noteInfo struct {
-	record  data.RecordType
-	input   input
-	parents map[data.RecordType]string
-}
-
 type NoteModel struct {
 	note    *data.Note
 	content string
 	focused bool
 
-	info      noteInfo
-	infoCache noteInfo
-	// record record
-	// info struct {
-	// 	record data.RecordType
-	// 	// name string
-	// 	input   input
-	// 	parents map[data.RecordType]string
-	// }
+	info struct {
+		record  data.RecordType
+		name    string
+		parents map[data.RecordType]string
+	}
 
 	err error
 }
 
 func NewNoteModel(
 	recordType data.RecordType,
-	r record,
-	i input,
-	// name string,
-	// parents map[data.RecordType]string,
+	name string,
+	parents map[data.RecordType]string,
 ) *NoteModel {
-	parents := map[data.RecordType]string{}
-	if r != nil {
-		parents = r.GetParentsTitle()
-	}
-
 	return &NoteModel{
-		info: noteInfo{
+		info: struct {
+			record  data.RecordType
+			name    string
+			parents map[data.RecordType]string
+		}{
 			record:  recordType,
-			input:   i,
+			name:    name,
 			parents: parents,
 		},
-		// info: struct {
-		// 	record data.RecordType
-		// 	// name    string
-		// 	input   input
-		// 	parents map[data.RecordType]string
-		// }{
-		// 	record: recordType,
-		// 	// name:    i.Value(),
-		// 	input:   i,
-		// 	parents: parents,
-		// },
 	}
 }
 
@@ -111,15 +83,6 @@ func (m *NoteModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = errors.New("failed to read note content")
 			return m, nil
 		}
-
-		// m.updateInfoCache()
-
-		// if len(content) == 0 {
-		// 	if err := m.note.Remove(); err != nil {
-		// 		m.err = errors.New("failed to remove empty note")
-		// 		return m, nil
-		// 	}
-		// }
 		m.content = string(content)
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -177,20 +140,7 @@ func (m *NoteModel) Blur() {
 }
 
 func (m *NoteModel) Value() string {
-	data := struct {
-		Name   string
-		Target string
-		Action string
-	}{
-		// Name:   m.info.name,
-		Name:   m.info.input.Value(),
-		Target: m.info.parents[data.RecordTypeTarget],
-		Action: m.info.parents[data.RecordTypeAction],
-	}
-	content, _ := m.render(data)
-
-	return string(content)
-	// return m.content
+	return m.content
 }
 
 func (m *NoteModel) SetValue(content string) error {
@@ -231,33 +181,21 @@ func (m *NoteModel) defaultContent() ([]byte, error) {
 		return []byte{}, nil
 	}
 
-	// data := struct {
-	// 	Name   string
-	// 	Target string
-	// 	Action string
-	// }{
-	// 	// Name:   m.info.name,
-	// 	Name:   m.info.input.Value(),
-	// 	Target: m.info.parents[data.RecordTypeTarget],
-	// 	Action: m.info.parents[data.RecordTypeAction],
-	// }
-	// content, err := render(filename, data)
-	// if err != nil {
-	// 	return []byte{}, err
-	// }
-	content, err := fs.ReadFile(noteTemplates, "templates/"+filename)
+	data := struct {
+		Name   string
+		Target string
+		Action string
+	}{
+		Name:   m.info.name,
+		Target: m.info.parents[data.RecordTypeTarget],
+		Action: m.info.parents[data.RecordTypeAction],
+	}
+	content, err := render(filename, data)
 	if err != nil {
 		return []byte{}, err
 	}
 
 	return content, nil
-}
-
-func (m *NoteModel) updateInfoCache() {
-	m.infoCache.record = m.info.record
-	m.infoCache.input = m.info.input
-	m.infoCache.parents = make(map[data.RecordType]string)
-	maps.Copy(m.infoCache.parents, m.info.parents)
 }
 
 func openEditor(filepath string) tea.Cmd {
