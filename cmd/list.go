@@ -308,6 +308,8 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return l, confirmationCmd
 		case "n":
 			return l, switchToCreateCmd(l.recordType, l.src)
+		case "m":
+			return l, switchToMenuCmd
 		case "ctrl+r":
 			l.clearMsg()
 			return l, l.hooks.loadAll(
@@ -570,10 +572,11 @@ func (l *listPage) helperPopup(width int) {
 		"e":     "Edit " + strings.ToLower(recordType),
 		"d":     "Delete " + strings.ToLower(recordType),
 		"f":     "Filter",
+		"m":     "Menu",
 		"<C-r>": "Refresh",
 		"?":     "Toggle helper",
 	}
-	order := []string{"<", "↑/↓", "q", "n", "v", "e", "d", "f", "<C-r>", "?"}
+	order := []string{"<", "↑/↓", "q", "n", "v", "e", "d", "f", "m", "<C-r>", "?"}
 
 	var enterValue string
 	if l.recordType == data.RecordTypeSession && l.selection.hasRecords() &&
