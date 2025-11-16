@@ -49,9 +49,9 @@ func (m *signupPage) setFields() {
 
 	switch m.action {
 	case cmdCreate:
-		name := usernameField(signupFormWidth, true)
-		email := emailField(signupFormWidth, false)
-		password := passwordField(signupFormWidth, false)
+		name := usernameInput(signupFormWidth, true)
+		email := emailInput(signupFormWidth, false)
+		password := passwordInput(signupFormWidth, false)
 		passwordConfirm := passwordConfirmField(
 			signupFormWidth,
 			false,
@@ -59,7 +59,7 @@ func (m *signupPage) setFields() {
 		)
 		focusables = append(focusables, name, email, password, passwordConfirm)
 	case cmdUpdate:
-		token := tokenField(signupFormWidth, true, "activation token")
+		token := tokenInput(signupFormWidth, true, "activation token")
 		focusables = append(focusables, token)
 	}
 
@@ -258,7 +258,7 @@ func (m signupPage) activateView() string {
 }
 
 func (m signupPage) validationError() error {
-	return fieldsValidation(m.fields, "input validation failed")
+	return inputsValidation(m.fields, "input validation failed")
 }
 
 func (m signupPage) signup() tea.Cmd {

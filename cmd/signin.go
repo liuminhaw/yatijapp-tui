@@ -32,8 +32,8 @@ type signinPage struct {
 func newSigninPage(cfg config, size style.ViewSize) signinPage {
 	focusables := []Focusable{}
 
-	email := emailField(signinFormWidth, true)
-	password := passwordField(signinFormWidth, false)
+	email := emailInput(signinFormWidth, true)
+	password := passwordInput(signinFormWidth, false)
 
 	focusables = append(focusables, email, password)
 
@@ -152,7 +152,7 @@ func (m signinPage) View() string {
 }
 
 func (m signinPage) validationError() error {
-	return fieldsValidation(m.fields, "input validation failed")
+	return inputsValidation(m.fields, "input validation failed")
 }
 
 func (m signinPage) signin() tea.Cmd {

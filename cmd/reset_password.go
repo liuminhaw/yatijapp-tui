@@ -55,11 +55,11 @@ func (m *resetPasswordPage) setFields() {
 
 	switch m.action {
 	case cmdCreate:
-		email := emailField(resetPasswordFormWidth, true)
+		email := emailInput(resetPasswordFormWidth, true)
 		focusables = append(focusables, email)
 	case cmdUpdate:
-		token := tokenField(resetPasswordFormWidth, true, "reset token")
-		password := passwordField(resetPasswordFormWidth, false)
+		token := tokenInput(resetPasswordFormWidth, true, "reset token")
+		password := passwordInput(resetPasswordFormWidth, false)
 		passwordConfirm := passwordConfirmField(
 			resetPasswordFormWidth,
 			false,
@@ -247,7 +247,7 @@ func (m resetPasswordPage) resetPasswordView() string {
 }
 
 func (m resetPasswordPage) validationError() error {
-	return fieldsValidation(m.fields, "input validation failed")
+	return inputsValidation(m.fields, "input validation failed")
 }
 
 func (m resetPasswordPage) sendResetToken() tea.Cmd {

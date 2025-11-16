@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/liuminhaw/yatijapp-tui/colors"
@@ -72,39 +71,19 @@ func newRecordConfigPage(
 	size style.ViewSize,
 	record yatijappRecord,
 	recordType data.RecordType,
-	// createWithSrc bool,
 	prev tea.Model,
 ) (recordConfigPage, error) {
 	focusables := []Focusable{}
-	// hiddens := make(map[string]struct{ val string })
 	hiddens := make(map[string]string)
 	selectorFields := make(map[data.RecordType]int)
 
-	name := textinput.New()
-	name.Prompt = ""
-	name.Placeholder = "Give " + strings.ToLower(string(recordType)) + " a name"
-	name.Width = titleInputViewWidth - 1
-	name.CharLimit = 80
-	name.Validate = validator.MultipleValidators(
-		validator.ValidateRequired("title is required"),
-		validator.ValidateReachMaxLength(80),
-	)
-
-	due := textinput.New()
-	due.Placeholder = "YYYY-MM-DD"
-	due.Width = dueDateInputViewWidth - 1
-	due.Prompt = ""
-	due.Validate = validator.MultipleValidators(
-		validator.ValidateDateTime(validator.ValidDateFormats),
+	name := nameInput(titleInputViewWidth, false, strings.ToLower(string(recordType)))
+	due := dueInput(
+		dueDateInputViewWidth,
+		false,
 		validator.ValidateDateAfter(time.Now().AddDate(0, 0, -1)),
 	)
-
-	description := textinput.New()
-	description.Prompt = ""
-	description.Placeholder = "Information about the " + strings.ToLower(string(recordType))
-	description.Width = formWidth - 1
-	description.CharLimit = 200
-	description.Validate = validator.ValidateReachMaxLength(200)
+	description := descriptionField(formWidth, false)
 
 	status := model.NewStatusModel(
 		[]string{"queued", "in progress", "completed", "canceled"},
@@ -128,9 +107,7 @@ func newRecordConfigPage(
 			name.SetValue(record.GetTitle())
 		}
 
-		due.Validate = validator.MultipleValidators(
-			validator.ValidateDateTime(validator.ValidDateFormats),
-		)
+		due = dueInput(dueDateInputViewWidth, false)
 
 		dueDate, dueDateValid := record.GetDueDate()
 		if dueDateValid {
@@ -163,14 +140,7 @@ func newRecordConfigPage(
 
 		uuid = record.GetUUID()
 	}
-	focusables = append(
-		focusables,
-		model.NewTextInputWrapper(name),
-		model.NewTextInputWrapper(due),
-		model.NewTextInputWrapper(description),
-		status,
-		note,
-	)
+	focusables = append(focusables, name, due, description, status, note)
 
 	var focusCache int
 	switch recordType {
@@ -268,17 +238,8 @@ func newSessionConfigPage(
 	parentAction := components.NewText("", showSelectorMsg{selection: data.RecordTypeAction})
 	parentAction.ValidateFunc = validator.ValidateRequired("action is required")
 
-	startsAt := textinput.New()
-	startsAt.Prompt = ""
-	startsAt.Placeholder = "YYYY-mm-dd HH:MM:SS"
-	startsAt.Width = formWidth - 1
-	startsAt.Validate = validator.ValidateDateTime(validator.ValidDateTimeFormats)
-
-	endsAt := textinput.New()
-	endsAt.Prompt = ""
-	endsAt.Placeholder = "YYYY-mm-dd HH:MM:SS"
-	endsAt.Width = formWidth - 1
-	endsAt.Validate = validator.ValidateDateTime(validator.ValidDateTimeFormats)
+	startsAt := timeInput(formWidth, false)
+	endsAt := timeInput(formWidth, false)
 
 	var uuid string
 	recordAction := cmdCreate
@@ -314,14 +275,7 @@ func newSessionConfigPage(
 			endsAt.SetValue(session.EndsAt.Time.Format("2006-01-02 15:04:05"))
 			startsAt.SetValue(session.StartsAt.Format("2006-01-02 15:04:05"))
 
-			focusables = append(
-				focusables,
-				parentTarget,
-				parentAction,
-				model.NewTextInputWrapper(startsAt),
-				model.NewTextInputWrapper(endsAt),
-				note,
-			)
+			focusables = append(focusables, parentTarget, parentAction, startsAt, endsAt, note)
 			focused = 2
 		} else {
 			focusables = append(focusables, parentTarget, parentAction, note)
@@ -398,6 +352,19 @@ func (p recordConfigPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "ctrl+c":
 			return p, tea.Quit
+		}
+		if isFnKey(msg) {
+			n, err := fnKeyNumber(msg)
+			if err != nil {
+				panic("failed to get function key number: " + err.Error())
+			}
+			if n >= 1 && n <= len(p.fields) {
+				p.fields[p.focused].Validate()
+				p.fields[p.focused].Blur()
+				p.focused = n - 1
+				p.focusedCache = p.focused
+				return p, p.fields[p.focused].Focus()
+			}
 		}
 	case showSelectorMsg:
 		switch msg.selection {
@@ -486,28 +453,18 @@ func (p recordConfigPage) View() string {
 }
 
 func (p recordConfigPage) tarActConfigView() string {
-	name := p.fields[0]
-	due := p.fields[1]
-	description := p.fields[2]
-	status := p.fields[3]
-	noteField := p.noteField(4)
-	var targetField string
-	if p.recordType == data.RecordTypeAction {
-		targetField = p.parentField(data.RecordTypeTarget, 5, false)
-	}
+	name := field{idx: 0, obj: p.fields[0]}
+	due := field{idx: 1, obj: p.fields[1]}
+	description := field{idx: 2, obj: p.fields[2]}
+	status := field{idx: 3, obj: p.fields[3]}
+	note := field{idx: 4, obj: p.fields[4]}
 
 	titleView := style.TitleBarView([]string{p.title}, viewWidth, false)
 
-	var statusPrompt string
-	if status.Focused() {
-		statusPrompt = fmt.Sprintf(
-			"%s %s",
-			style.FormFieldStyle.Prompt("Status", status.Focused()),
-			style.FormFieldStyle.Helper.Render("(Use ←/→ keys to select)"),
-		)
-	} else {
-		statusPrompt = style.FormFieldStyle.Prompt("Status", status.Focused())
-	}
+	statusPrompt := status.prompt(
+		status.simpleTitlePrompt("Status", "(Use ←/→ keys to select)", false),
+		status.simpleTitlePrompt("Status", fmt.Sprintf("<f%d>", status.idx+1), false),
+	)
 
 	configContent := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -515,30 +472,24 @@ func (p recordConfigPage) tarActConfigView() string {
 			lipgloss.Top,
 			lipgloss.NewStyle().
 				Width(titleInputViewWidth).Margin(1, 2, 0, 5).Render(
-				fmt.Sprintf(
-					"%s\n%s\n%s",
-					style.FormFieldStyle.Prompt("Name", name.Focused()),
-					style.FormFieldStyle.Content.Render(name.View()),
-					style.FormFieldStyle.Error.Render(name.Error()),
+				name.prompt(
+					name.textInputPrompt("Name", fmt.Sprintf("<f%d>", name.idx+1)),
+					name.textInputPrompt("Name", fmt.Sprintf("<f%d>", name.idx+1)),
 				),
 			),
 			lipgloss.NewStyle().
 				Width(dueDateInputViewWidth).Margin(1, 0, 0, 3).Render(
-				fmt.Sprintf(
-					"%s\n%s\n%s",
-					style.FormFieldStyle.Prompt("Due Date", due.Focused()),
-					style.FormFieldStyle.Content.Render(due.View()),
-					style.FormFieldStyle.Error.Render(due.Error()),
+				due.prompt(
+					due.textInputPrompt("Due Date", fmt.Sprintf("<f%d>", due.idx+1)),
+					due.textInputPrompt("Due Date", fmt.Sprintf("<f%d>", due.idx+1)),
 				),
 			),
 		),
 
 		lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0).Render(
-			fmt.Sprintf(
-				"%s\n%s\n%s",
-				style.FormFieldStyle.Prompt("Description", description.Focused()),
-				style.FormFieldStyle.Content.Render(description.View()),
-				style.FormFieldStyle.Error.Render(description.Error()),
+			description.prompt(
+				description.textInputPrompt("Description", fmt.Sprintf("<f%d>", description.idx+1)),
+				description.textInputPrompt("Description", fmt.Sprintf("<f%d>", description.idx+1)),
 			),
 		),
 
@@ -546,15 +497,37 @@ func (p recordConfigPage) tarActConfigView() string {
 			fmt.Sprintf(
 				"%s\n%s\n",
 				statusPrompt,
-				style.FormFieldStyle.Content.Render(status.View()),
+				style.FormFieldStyle.Content.Render(status.obj.View()),
 			),
 		),
 
-		noteField+"\n",
+		lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0).Render(
+			note.prompt(
+				note.simpleTitlePrompt("Note", "(Press 'e' to edit)", true),
+				note.simpleTitlePrompt("Note", fmt.Sprintf("<f%d>", note.idx+1), true),
+			),
+		),
+		"\n",
 	)
 
 	if p.recordType == data.RecordTypeAction {
-		configContent = lipgloss.JoinVertical(lipgloss.Left, targetField, configContent)
+		parent := field{idx: 5, obj: p.fields[5]}
+		configContent = lipgloss.JoinVertical(
+			lipgloss.Left,
+			parent.prompt(
+				parent.selectionPrompt(
+					string(data.RecordTypeTarget),
+					"(Press 'e' to select)",
+					false,
+				),
+				parent.selectionPrompt(
+					string(data.RecordTypeTarget),
+					fmt.Sprintf("<f%d>", parent.idx+1),
+					false,
+				),
+			),
+			configContent,
+		)
 	}
 
 	var saveAction string
@@ -601,9 +574,9 @@ func (p recordConfigPage) sessionCreateView() string {
 		Render("Start new session")
 
 	fieldStyle := lipgloss.NewStyle().Width(60).Margin(1, 3, 0)
-	targetField := p.parentField(data.RecordTypeTarget, 0, true, fieldStyle)
-	actionField := p.parentField(data.RecordTypeAction, 1, true, fieldStyle)
-	noteField := p.noteField(2, fieldStyle)
+	target := field{idx: 0, obj: p.fields[0]}
+	action := field{idx: 1, obj: p.fields[1]}
+	note := field{idx: 2, obj: p.fields[2]}
 
 	helper := lipgloss.NewStyle().
 		Width(60).
@@ -622,7 +595,42 @@ func (p recordConfigPage) sessionCreateView() string {
 	msgView := style.ErrorView(style.ViewSize{Width: 66, Height: 1}, p.err, nil)
 
 	form := lipgloss.JoinVertical(
-		lipgloss.Left, title, targetField, actionField, noteField, msgView, helper,
+		lipgloss.Left,
+		title,
+		target.prompt(
+			target.selectionPrompt(
+				string(data.RecordTypeTarget),
+				"(Press 'e' to select)",
+				true,
+				fieldStyle,
+			),
+			target.selectionPrompt(
+				string(data.RecordTypeTarget),
+				fmt.Sprintf("<f%d>", target.idx+1),
+				true,
+				fieldStyle,
+			),
+		),
+		action.prompt(
+			action.selectionPrompt(
+				string(data.RecordTypeAction),
+				"(Press 'e' to select)",
+				true,
+				fieldStyle,
+			),
+			action.selectionPrompt(
+				string(data.RecordTypeAction),
+				fmt.Sprintf("<f%d>", action.idx+1),
+				true,
+				fieldStyle,
+			),
+		),
+		note.prompt(
+			note.simpleTitlePrompt("Note", "(Press 'e' to edit)", true, fieldStyle),
+			note.simpleTitlePrompt("Note", fmt.Sprintf("<f%d>", note.idx+1), true, fieldStyle),
+		),
+		msgView,
+		helper,
 	)
 
 	return lipgloss.NewStyle().
@@ -632,38 +640,54 @@ func (p recordConfigPage) sessionCreateView() string {
 }
 
 func (p recordConfigPage) sessionConfigView() string {
-	targetField := p.parentField(data.RecordTypeTarget, 0, false)
-	actionField := p.parentField(data.RecordTypeAction, 1, false)
-	startsAt := p.fields[2]
-	endsAt := p.fields[3]
-	noteField := p.noteField(4)
+	target := field{idx: 0, obj: p.fields[0]}
+	action := field{idx: 1, obj: p.fields[1]}
+	startsAt := field{idx: 2, obj: p.fields[2]}
+	endsAt := field{idx: 3, obj: p.fields[3]}
+	note := field{idx: 4, obj: p.fields[4]}
 
 	titleView := style.TitleBarView([]string{p.title}, viewWidth, false)
 
 	configContent := lipgloss.JoinVertical(
 		lipgloss.Left,
-		targetField,
-		actionField,
+		target.prompt(
+			target.selectionPrompt(string(data.RecordTypeTarget), "(Press 'e' to select)", false),
+			target.selectionPrompt(
+				string(data.RecordTypeTarget),
+				fmt.Sprintf("<f%d>", target.idx+1),
+				false,
+			),
+		),
+		action.prompt(
+			action.selectionPrompt(string(data.RecordTypeAction), "(Press 'e' to select)", false),
+			action.selectionPrompt(
+				string(data.RecordTypeAction),
+				fmt.Sprintf("<f%d>", action.idx+1),
+				false,
+			),
+		),
 		lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			lipgloss.NewStyle().Width(30).Margin(1, 5, 0, 5).Render(
-				fmt.Sprintf(
-					"%s\n%s\n%s",
-					style.FormFieldStyle.Prompt("Starts At", startsAt.Focused()),
-					style.FormFieldStyle.Content.Render(startsAt.View()),
-					style.FormFieldStyle.Error.Render(startsAt.Error()),
+				startsAt.prompt(
+					startsAt.textInputPrompt("Starts At", fmt.Sprintf("<f%d>", startsAt.idx+1)),
+					startsAt.textInputPrompt("Starts At", fmt.Sprintf("<f%d>", startsAt.idx+1)),
 				),
 			),
 			lipgloss.NewStyle().Width(30).Margin(1, 5, 0, 5).Render(
-				fmt.Sprintf(
-					"%s\n%s\n%s",
-					style.FormFieldStyle.Prompt("Ends At", endsAt.Focused()),
-					style.FormFieldStyle.Content.Render(endsAt.View()),
-					style.FormFieldStyle.Error.Render(endsAt.Error()),
+				endsAt.prompt(
+					endsAt.textInputPrompt("Ends At", fmt.Sprintf("<f%d>", endsAt.idx+1)),
+					endsAt.textInputPrompt("Ends At", fmt.Sprintf("<f%d>", endsAt.idx+1)),
 				),
 			),
 		),
-		noteField+"\n",
+		lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0).Render(
+			note.prompt(
+				note.simpleTitlePrompt("Note", "(Press 'e' to edit)", true),
+				note.simpleTitlePrompt("Note", fmt.Sprintf("<f%d>", note.idx+1), true),
+			),
+		),
+		"\n",
 	)
 
 	helperContent := []style.HelperContent{
@@ -695,7 +719,12 @@ func (p recordConfigPage) sessionConfigView() string {
 }
 
 func (p recordConfigPage) validationError() error {
-	return fieldsValidation(p.fields, "input validation failed")
+	focusables := []Focusable{}
+	for _, f := range p.fields {
+		focusables = append(focusables, f)
+	}
+
+	return inputsValidation(focusables, "input validation failed")
 }
 
 func (p recordConfigPage) create() tea.Cmd {
@@ -850,82 +879,6 @@ func (p recordConfigPage) sessionUpdate() (recordRequestData, tea.Cmd) {
 	}
 
 	return d, nil
-}
-
-func (p recordConfigPage) noteField(fieldIndex int, styling ...lipgloss.Style) string {
-	if len(p.fields) <= fieldIndex {
-		return ""
-	}
-
-	note := p.fields[fieldIndex]
-	var notePrompt string
-	if note.Focused() {
-		notePrompt = fmt.Sprintf(
-			"%s %s\n%s",
-			style.FormFieldStyle.Prompt("Note", note.Focused()),
-			style.FormFieldStyle.Helper.Render("(Press 'e' to edit)"),
-			style.FormFieldStyle.Error.Render(note.Error()),
-		)
-	} else {
-		notePrompt = fmt.Sprintf(
-			"%s\n%s",
-			style.FormFieldStyle.Prompt("Note", note.Focused()),
-			style.FormFieldStyle.Error.Render(note.Error()),
-		)
-	}
-
-	applyStyling := lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0)
-	for _, s := range styling {
-		applyStyling = s.Inherit(applyStyling)
-	}
-
-	return applyStyling.Render(notePrompt)
-}
-
-func (p recordConfigPage) parentField(
-	parentType data.RecordType,
-	index int,
-	compacted bool,
-	styling ...lipgloss.Style,
-) string {
-	if len(p.fields) <= index {
-		return ""
-	}
-
-	focusable := p.fields[index]
-	placeholder := string(parentType)
-
-	var prompt string
-	if focusable.Focused() {
-		prompt = style.FormFieldStyle.Prompt(placeholder+" Source", true) +
-			" " + style.FormFieldStyle.Helper.Render("(Press 'e' to select)")
-	} else {
-		prompt = style.FormFieldStyle.Prompt(placeholder+" Source", false)
-	}
-
-	var input string
-	if focusable.View() == "" {
-		input = lipgloss.NewStyle().Foreground(colors.HelperTextDim).Render(placeholder + " name")
-	} else {
-		input = style.FormFieldStyle.Content.Render(focusable.View())
-	}
-
-	applyStyling := lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0)
-
-	for _, s := range styling {
-		applyStyling = s.Inherit(applyStyling)
-	}
-
-	if compacted {
-		return applyStyling.Render(
-			prompt + " " + style.FormFieldStyle.Error.Render(focusable.Error()) +
-				"\n" + input,
-		)
-	} else {
-		return applyStyling.Render(
-			prompt + "\n" + input + "\n" + style.FormFieldStyle.Error.Render(focusable.Error()),
-		)
-	}
 }
 
 func (p recordConfigPage) prevPage() tea.Model {

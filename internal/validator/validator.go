@@ -64,7 +64,7 @@ func ValidateDateAfter(date time.Time) func(string) error {
 		}
 
 		if parsedDate.Before(date) {
-			return fmt.Errorf("must be after %s", date.Format("2006-01-02"))
+			return fmt.Errorf("must be future")
 		}
 		return nil
 	}
