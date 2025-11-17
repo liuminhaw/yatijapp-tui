@@ -254,22 +254,6 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return l, nil
 				}
 
-				if l.recordType == data.RecordTypeSession {
-					session := selected.(data.Session)
-					if !session.EndsAt.Valid {
-						popupModel = model.NewAlert(
-							"Edit Session Not Allowed",
-							"notification",
-							[]string{"Please end the session before editing."},
-							[]string{"Cannot edit an ongoing session."},
-							60,
-							map[string]tea.Cmd{"return": cancelPopupCmd},
-						)
-						l.popupModels = append(l.popupModels, popupModel)
-						l.popup = l.popupModels[len(l.popupModels)-1].View()
-						return l, nil
-					}
-				}
 				l.loading = true
 				l.clearMsg()
 				return l, l.hooks.load(l.cfg.apiEndpoint, selected.GetUUID(), "", l.cfg.authClient)

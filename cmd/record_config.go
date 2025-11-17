@@ -268,19 +268,18 @@ func newSessionConfigPage(
 		hiddens["parent_action_uuid"] = record.GetParentsUUID()[data.RecordTypeAction]
 
 		uuid = record.GetUUID()
+		if uuid != "" {
+			recordAction = cmdUpdate
+		}
 
 		session := record.(data.Session)
+		startsAt.SetValue(session.StartsAt.Format("2006-01-02 15:04:05"))
 		if session.EndsAt.Valid {
-			recordAction = cmdUpdate
 			endsAt.SetValue(session.EndsAt.Time.Format("2006-01-02 15:04:05"))
-			startsAt.SetValue(session.StartsAt.Format("2006-01-02 15:04:05"))
-
-			focusables = append(focusables, parentTarget, parentAction, startsAt, endsAt, note)
-			focused = 2
-		} else {
-			focusables = append(focusables, parentTarget, parentAction, note)
-			focused = 2
 		}
+
+		focusables = append(focusables, parentTarget, parentAction, startsAt, endsAt, note)
+		focused = 2
 	} else {
 		focusables = append(focusables, parentTarget, parentAction, note)
 		focused = 0
@@ -642,9 +641,9 @@ func (p recordConfigPage) sessionCreateView() string {
 func (p recordConfigPage) sessionConfigView() string {
 	target := field{idx: 0, obj: p.fields[0]}
 	action := field{idx: 1, obj: p.fields[1]}
-	startsAt := field{idx: 2, obj: p.fields[2]}
-	endsAt := field{idx: 3, obj: p.fields[3]}
-	note := field{idx: 4, obj: p.fields[4]}
+	startsAt := &field{idx: 2, obj: p.fields[2]}
+	endsAt := &field{idx: 3, obj: p.fields[3]}
+	note := &field{idx: 4, obj: p.fields[4]}
 
 	titleView := style.TitleBarView([]string{p.title}, viewWidth, false)
 
@@ -865,17 +864,21 @@ func (p recordConfigPage) sessionUpdate() (recordRequestData, tea.Cmd) {
 	if err != nil {
 		return recordRequestData{}, validationErrorCmd(errors.New("invalid starts at value"))
 	}
-	endsAtTime, err := time.ParseInLocation(layout, endsAt, time.Local)
-	if err != nil {
-		return recordRequestData{}, validationErrorCmd(errors.New("invalid ends at value"))
-	}
+
 	d := recordRequestData{
 		uuid:       p.uuid,
 		targetUUID: targetUUID,
 		actionUUID: actionUUID,
 		startsAt:   startsAtTime,
-		endsAt:     sql.NullTime{Time: endsAtTime, Valid: true},
 		note:       note,
+	}
+
+	if endsAt != "" {
+		endsAtTime, err := time.ParseInLocation(layout, endsAt, time.Local)
+		if err != nil {
+			return recordRequestData{}, validationErrorCmd(errors.New("invalid ends at value"))
+		}
+		d.endsAt = sql.NullTime{Time: endsAtTime, Valid: true}
 	}
 
 	return d, nil
