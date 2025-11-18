@@ -270,16 +270,20 @@ func newSessionConfigPage(
 		uuid = record.GetUUID()
 		if uuid != "" {
 			recordAction = cmdUpdate
+
+			session := record.(data.Session)
+			startsAt.SetValue(session.StartsAt.Format("2006-01-02 15:04:05"))
+			if session.EndsAt.Valid {
+				endsAt.SetValue(session.EndsAt.Time.Format("2006-01-02 15:04:05"))
+			}
+
+			focusables = append(focusables, parentTarget, parentAction, startsAt, endsAt, note)
+			focused = 2
+		} else {
+			focusables = append(focusables, parentTarget, parentAction, note)
+			focused = 0
 		}
 
-		session := record.(data.Session)
-		startsAt.SetValue(session.StartsAt.Format("2006-01-02 15:04:05"))
-		if session.EndsAt.Valid {
-			endsAt.SetValue(session.EndsAt.Time.Format("2006-01-02 15:04:05"))
-		}
-
-		focusables = append(focusables, parentTarget, parentAction, startsAt, endsAt, note)
-		focused = 2
 	} else {
 		focusables = append(focusables, parentTarget, parentAction, note)
 		focused = 0

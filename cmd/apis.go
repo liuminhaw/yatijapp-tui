@@ -259,7 +259,7 @@ func (d recordRequestData) targetRequestBody() data.TargetRequestBody {
 		dueDate, err := time.ParseInLocation("2006-01-02", d.dueDate, time.Local)
 		if err == nil {
 			dueDateTyped := data.Date(dueDate)
-			body.DueDate = &dueDateTyped
+			body.DueDate = dueDateTyped.String()
 		}
 	}
 	return body
@@ -277,7 +277,7 @@ func (d recordRequestData) actionRequestBody() data.ActionRequestBody {
 		dueDate, err := time.ParseInLocation("2006-01-02", d.dueDate, time.Local)
 		if err == nil {
 			dueDateTyped := data.Date(dueDate)
-			body.DueDate = &dueDateTyped
+			body.DueDate = dueDateTyped.String()
 		}
 	}
 	return body
@@ -285,17 +285,10 @@ func (d recordRequestData) actionRequestBody() data.ActionRequestBody {
 
 func (d recordRequestData) sessionRequestBody() data.SessionRequestBody {
 	body := data.SessionRequestBody{
-		EndsAt: &d.endsAt,
-	}
-
-	if d.actionUUID != "" {
-		body.ActionUUID = &d.actionUUID
-	}
-	if !d.startsAt.IsZero() {
-		body.StartsAt = &d.startsAt
-	}
-	if d.note != "" {
-		body.Notes = &d.note
+		ActionUUID: d.actionUUID,
+		StartsAt:   d.startsAt,
+		EndsAt:     d.endsAt,
+		Notes:      d.note,
 	}
 
 	return body

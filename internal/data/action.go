@@ -179,7 +179,7 @@ type ActionRequestBody struct {
 	TargetUUID  string `json:"target_uuid"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	DueDate     *Date  `json:"due_date,omitempty"`
+	DueDate     string `json:"due_date"`
 	Notes       string `json:"notes"`
 	Status      string `json:"status"`
 }

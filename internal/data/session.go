@@ -181,10 +181,10 @@ func DeleteSession(serverUrl, uuid string, client *authclient.AuthClient) error 
 }
 
 type SessionRequestBody struct {
-	ActionUUID *string       `json:"action_uuid"`
-	StartsAt   *time.Time    `json:"starts_at"` // in RFC3339 format
-	EndsAt     *sql.NullTime `json:"ends_at,omitzero"`
-	Notes      *string       `json:"notes"`
+	ActionUUID string       `json:"action_uuid"`
+	StartsAt   time.Time    `json:"starts_at"` // in RFC3339 format
+	EndsAt     sql.NullTime `json:"ends_at"`
+	Notes      string       `json:"notes"`
 }
 
 func (b SessionRequestBody) Create(serverURL string, client *authclient.AuthClient) error {
