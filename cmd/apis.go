@@ -286,9 +286,11 @@ func (d recordRequestData) actionRequestBody() data.ActionRequestBody {
 func (d recordRequestData) sessionRequestBody() data.SessionRequestBody {
 	body := data.SessionRequestBody{
 		ActionUUID: d.actionUUID,
-		StartsAt:   d.startsAt,
 		EndsAt:     d.endsAt,
 		Notes:      d.note,
+	}
+	if !d.startsAt.IsZero() {
+		body.StartsAt = &d.startsAt
 	}
 
 	return body
