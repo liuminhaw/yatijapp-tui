@@ -82,6 +82,7 @@ type GetSessionResponse struct {
 }
 
 func GetSession(serverURL, uuid string, client *authclient.AuthClient) (Session, error) {
+	// time.Sleep(1 * time.Second) // Simulate a delay for loading targets
 	path, err := url.JoinPath(serverURL, "v1", "sessions", uuid)
 	if err != nil {
 		return Session{}, UnexpectedApiDataErr{
@@ -184,7 +185,7 @@ type SessionRequestBody struct {
 	ActionUUID string       `json:"action_uuid"`
 	StartsAt   *time.Time   `json:"starts_at"` // in RFC3339 format
 	EndsAt     sql.NullTime `json:"ends_at"`
-	Notes      string       `json:"notes"`
+	Notes      *string      `json:"notes"`
 }
 
 func (b SessionRequestBody) Create(serverURL string, client *authclient.AuthClient) error {

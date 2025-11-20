@@ -764,7 +764,7 @@ func (p recordConfigPage) tarActCreate() (recordRequestData, tea.Cmd) {
 		title:       title,
 		description: description,
 		status:      status,
-		note:        note,
+		note:        nullNote{valid: true, note: note},
 		dueDate:     due,
 	}
 	if p.recordType == data.RecordTypeAction {
@@ -794,7 +794,7 @@ func (p recordConfigPage) sessionCreate() (recordRequestData, tea.Cmd) {
 	d := recordRequestData{
 		targetUUID: targetUUID,
 		actionUUID: actionUUID,
-		note:       note,
+		note:       nullNote{valid: true, note: note},
 	}
 
 	return d, nil
@@ -835,7 +835,7 @@ func (p recordConfigPage) tarActUpdate() (recordRequestData, tea.Cmd) {
 		title:       title,
 		description: description,
 		status:      status,
-		note:        note,
+		note:        nullNote{valid: true, note: note},
 		dueDate:     due,
 	}
 	if p.recordType == data.RecordTypeAction {
@@ -874,7 +874,10 @@ func (p recordConfigPage) sessionUpdate() (recordRequestData, tea.Cmd) {
 		targetUUID: targetUUID,
 		actionUUID: actionUUID,
 		startsAt:   startsAtTime,
-		note:       note,
+		note: nullNote{
+			valid: true,
+			note:  note,
+		},
 	}
 
 	if endsAt != "" {

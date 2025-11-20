@@ -232,13 +232,18 @@ func deleteSession(serverURL, uuid string, client *authclient.AuthClient) tea.Cm
 	}
 }
 
+type nullNote struct {
+	valid bool
+	note  string
+}
+
 type recordRequestData struct {
 	// Common fields
 	uuid        string
 	title       string
 	description string
 	status      string
-	note        string
+	note        nullNote
 	dueDate     string
 	// Action specific
 	targetUUID string
@@ -253,7 +258,9 @@ func (d recordRequestData) targetRequestBody() data.TargetRequestBody {
 		Title:       d.title,
 		Description: d.description,
 		Status:      d.status,
-		Notes:       d.note,
+	}
+	if d.note.valid {
+		body.Notes = d.note.note
 	}
 	if d.dueDate != "" {
 		dueDate, err := time.ParseInLocation("2006-01-02", d.dueDate, time.Local)
@@ -271,7 +278,9 @@ func (d recordRequestData) actionRequestBody() data.ActionRequestBody {
 		Title:       d.title,
 		Description: d.description,
 		Status:      d.status,
-		Notes:       d.note,
+	}
+	if d.note.valid {
+		body.Notes = d.note.note
 	}
 	if d.dueDate != "" {
 		dueDate, err := time.ParseInLocation("2006-01-02", d.dueDate, time.Local)
@@ -287,7 +296,9 @@ func (d recordRequestData) sessionRequestBody() data.SessionRequestBody {
 	body := data.SessionRequestBody{
 		ActionUUID: d.actionUUID,
 		EndsAt:     d.endsAt,
-		Notes:      d.note,
+	}
+	if d.note.valid {
+		body.Notes = &d.note.note
 	}
 	if !d.startsAt.IsZero() {
 		body.StartsAt = &d.startsAt

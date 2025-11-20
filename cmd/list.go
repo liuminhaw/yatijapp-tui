@@ -198,7 +198,7 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.clearMsg()
 			return l, l.selection.prevPage()
 		case "enter":
-			if len(l.selection.records) > 0 {
+			if l.selection.hasRecords() {
 				selected := l.selection.current()
 				if selected == nil {
 					l.error = errors.New("no session selected on enter key press")
