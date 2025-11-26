@@ -137,7 +137,9 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		v.width = msg.Width
 		v.height = msg.Height
-		v.viewportDisplay()
+		if err := v.viewportDisplay(); err != nil {
+			return v, internalErrorCmd("failed to adjust view page size", err)
+		}
 	case tea.KeyMsg:
 		if v.popup != "" {
 			v.viewport.Style = style.BorderStyle["dimmed"]
@@ -148,7 +150,9 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+f":
 			v.fullView = !v.fullView
-			v.viewportDisplay()
+			if err := v.viewportDisplay(); err != nil {
+				return v, internalErrorCmd("failed to toggle full view mode", err)
+			}
 		case "ctrl+e":
 			note, err := data.NewTempNote("view")
 			if err != nil {
@@ -473,7 +477,7 @@ func (p viewPage) prevPage() tea.Model {
 	return p.prev
 }
 
-func (v *viewPage) viewportDisplay() {
+func (v *viewPage) viewportDisplay() error {
 	if v.width <= viewWidth || v.height <= 28 || !v.fullView {
 		v.viewport.Width = viewWidth
 		v.viewport.Height = 20
@@ -482,4 +486,6 @@ func (v *viewPage) viewportDisplay() {
 		v.viewport.Width = v.width
 		v.viewport.Height = v.height - 8
 	}
+
+	return v.renderViewport()
 }
