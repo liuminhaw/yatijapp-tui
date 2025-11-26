@@ -51,14 +51,14 @@ func (m *NoteModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.note == nil {
-				note, err := data.NewTempNote()
+				note, err := data.NewTempNote("model")
 				if err != nil {
 					m.err = errors.New("failed to create note")
 					return m, nil
 				}
 				m.note = note
 			}
-			return m, openEditor(m.note.Path())
+			return m, OpenEditor(m.note.Path())
 		}
 	}
 
@@ -89,7 +89,7 @@ func (m *NoteModel) Value() string {
 
 func (m *NoteModel) SetValue(content string) error {
 	if m.note == nil {
-		note, err := data.NewTempNote()
+		note, err := data.NewTempNote("model")
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func (m *NoteModel) Error() string {
 	return ""
 }
 
-func openEditor(filepath string) tea.Cmd {
+func OpenEditor(filepath string) tea.Cmd {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		if _, err := exec.LookPath("vim"); err == nil {

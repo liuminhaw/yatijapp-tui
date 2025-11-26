@@ -104,7 +104,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cfg,
 			msg.uuid,
 			style.ViewSize{Width: m.width, Height: m.height},
-			style.ViewSize{Width: 80, Height: 20},
+			style.ViewSize{Width: viewWidth, Height: 20},
 			m.active, // Previous model for navigation
 		)
 		return m, m.active.Init()

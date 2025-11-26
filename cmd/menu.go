@@ -185,12 +185,7 @@ func (m menuPage) View() string {
 		Bold(true).
 		Render(m.greeting)
 
-	menuTitle := lipgloss.NewStyle().
-		Width(20).
-		Padding(1, 2).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colors.Border).
-		Render(m.title)
+	menuTitle := style.BorderStyle["normal"].Width(20).Padding(1, 2).Render(m.title)
 
 	mainView := lipgloss.JoinHorizontal(
 		lipgloss.Top,

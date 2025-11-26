@@ -5,7 +5,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/liuminhaw/yatijapp-tui/colors"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 )
 
@@ -101,11 +100,9 @@ func (a Alert) View() string {
 
 	return lipgloss.JoinVertical(
 		lipgloss.Center,
-		lipgloss.NewStyle().
+		style.BorderStyle["highlighted"].
 			Width(a.width).
 			Align(lipgloss.Center, lipgloss.Center).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(colors.Text).
 			Padding(0, 1).
 			Render(b.String()),
 	)

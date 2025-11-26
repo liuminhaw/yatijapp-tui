@@ -69,9 +69,14 @@ var ChoicesStyle = map[string]struct {
 	},
 }
 
-var BorderStyling lipgloss.Style = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(colors.Border)
+var borderStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder())
+
+var BorderStyle = map[string]lipgloss.Style{
+	"normal":      borderStyle.BorderForeground(colors.Border),
+	"focused":     borderStyle.BorderForeground(colors.TextMuted),
+	"dimmed":      borderStyle.BorderForeground(colors.BorderMuted),
+	"highlighted": borderStyle.BorderForeground(colors.Text),
+}
 
 var FormFieldStyle = struct {
 	Content lipgloss.Style

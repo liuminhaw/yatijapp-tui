@@ -10,8 +10,8 @@ type Note struct {
 	file *os.File
 }
 
-func NewTempNote() (*Note, error) {
-	tmpDir := path.Join(os.TempDir(), "yatijapp-tui", "notes")
+func NewTempNote(subdirs ...string) (*Note, error) {
+	tmpDir := path.Join(os.TempDir(), "yatijapp-tui", "notes", path.Join(subdirs...))
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
 		return nil, err
 	}
@@ -44,4 +44,8 @@ func (n *Note) Write(content []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (n *Note) ReadOnly() error {
+	return n.file.Chmod(0440)
 }

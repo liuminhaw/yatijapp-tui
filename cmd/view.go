@@ -12,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/liuminhaw/yatijapp-tui/colors"
 	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
 	"github.com/liuminhaw/yatijapp-tui/internal/model"
@@ -26,14 +25,16 @@ type viewHooks struct {
 }
 
 type viewPage struct {
-	cfg  config
-	uuid string
+	cfg    config
+	helper bool
+	uuid   string
 
 	record     yatijappRecord
 	hooks      viewHooks
 	recordType data.RecordType
 
 	viewport viewport.Model
+	fullView bool
 
 	width  int
 	height int
@@ -45,7 +46,8 @@ type viewPage struct {
 	error error
 	prev  tea.Model // Previous model for navigation
 
-	popupModel tea.Model
+	popupModels []tea.Model
+	popup       string
 }
 
 func newViewPage(
@@ -55,9 +57,7 @@ func newViewPage(
 	prev tea.Model,
 ) viewPage {
 	vp := viewport.New(vpSize.Width, vpSize.Height)
-	vp.Style = lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colors.TextMuted)
+	vp.Style = style.BorderStyle["focused"]
 
 	return viewPage{
 		cfg:      cfg,
@@ -118,12 +118,49 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
+	var popupModel tea.Model
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "?":
+			v.clearMsg()
+			v.helper = !v.helper
+			if v.helper {
+				v.helperPopup(30)
+			} else {
+				v.popup = ""
+			}
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		v.width = msg.Width
 		v.height = msg.Height
+		v.viewportDisplay()
 	case tea.KeyMsg:
+		if v.popup != "" {
+			v.viewport.Style = style.BorderStyle["dimmed"]
+			break
+		} else {
+			v.viewport.Style = style.BorderStyle["focused"]
+		}
 		switch msg.String() {
+		case "ctrl+f":
+			v.fullView = !v.fullView
+			v.viewportDisplay()
+		case "ctrl+e":
+			note, err := data.NewTempNote("view")
+			if err != nil {
+				return v, internalErrorCmd("error occurs when viewing note in editor", err)
+			}
+			if err := note.Write([]byte(v.viewportContent())); err != nil {
+				return v, internalErrorCmd("error occurs when viewing note in editor", err)
+			}
+			if err := note.ReadOnly(); err != nil {
+				return v, internalErrorCmd("error occurs when viewing note in editor", err)
+			}
+			return v, model.OpenEditor(note.Path())
 		case "ctrl+c", "q":
 			return v, tea.Quit
 		case "<":
@@ -153,19 +190,23 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			deleteCmd := v.hooks.delete(v.cfg.apiEndpoint, v.uuid, v.cfg.authClient)
-			v.popupModel = model.NewAlert(
-				"Confirm Deletion",
-				"confirmation",
-				prompts,
-				warnings,
-				60,
+			popupModel = model.NewAlert(
+				"Confirm Deletion", "confirmation", prompts, warnings, 60,
 				map[string]tea.Cmd{"confirm": deleteCmd, "cancel": cancelPopupCmd},
 			)
+			v.popupModels = append(v.popupModels, popupModel)
+			v.popup = v.popupModels[len(v.popupModels)-1].View()
 			return v, nil
 		}
 	case cancelPopupMsg:
-		v.popupModel = nil
+		v.popupModels = v.popupModels[:len(v.popupModels)-1]
+		if len(v.popupModels) == 0 {
+			v.popup = ""
+		} else {
+			v.popup = v.popupModels[len(v.popupModels)-1].View()
+		}
 		v.clearMsg()
+		return v, nil
 	case apiSuccessResponseMsg:
 		v.loading = false
 		return v, v.hooks.load(v.cfg.apiEndpoint, v.uuid, msg.msg, v.cfg.authClient)
@@ -210,12 +251,15 @@ func (v viewPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, cmd
 	}
 
-	v.viewport, cmd = v.viewport.Update(msg)
 	cmds = append(cmds, cmd)
-	if v.popupModel != nil {
-		v.popupModel, cmd = v.popupModel.Update(msg)
+	if len(v.popupModels) > 0 {
+		lastIndex := len(v.popupModels) - 1
+		v.popupModels[lastIndex], cmd = v.popupModels[lastIndex].Update(msg)
+		v.popup = v.popupModels[lastIndex].View()
 		cmds = append(cmds, cmd)
 	}
+
+	v.viewport, cmd = v.viewport.Update(msg)
 
 	return v, tea.Batch(cmds...)
 }
@@ -254,6 +298,7 @@ func (v viewPage) View() string {
 		{Key: "e", Action: "edit"},
 		{Key: "d", Action: "delete"},
 		{Key: "q", Action: "quit"},
+		{Key: "?", Action: "modes"},
 	}, viewWidth)
 
 	container := lipgloss.JoinVertical(
@@ -263,10 +308,10 @@ func (v viewPage) View() string {
 		helperView,
 	)
 
-	if v.popupModel != nil {
-		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(v.popupModel.View())/2
-		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(v.popupModel.View())/2
-		container = strview.PlaceOverlay(overlayX, overlayY, v.popupModel.View(), container)
+	if v.popup != "" {
+		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(v.popup)/2
+		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(v.popup)/2
+		container = strview.PlaceOverlay(overlayX, overlayY, v.popup, container)
 	}
 
 	return style.ContainerStyle(v.width, container, 5).Render(container)
@@ -276,7 +321,12 @@ func (v viewPage) viewportContent() string {
 	var content strings.Builder
 
 	content.WriteString("# " + v.record.GetTitle() + "\n")
-	content.WriteString(v.record.GetDescription() + "\n\n")
+	description := v.record.GetDescription()
+	if description != "" {
+		content.WriteString(description + "\n\n")
+	} else {
+		content.WriteString("\n")
+	}
 
 	switch v.recordType {
 	case data.RecordTypeAction:
@@ -371,6 +421,24 @@ func (v *viewPage) clearMsg() {
 	v.msg = ""
 }
 
+func (v *viewPage) helperPopup(width int) {
+	items := map[string]string{
+		"<C-f>": "Toggle full screen",
+		"<C-e>": "Open in editor",
+		"?":     "Toggle mode helper",
+	}
+	order := []string{"<C-f>", "<C-e>", "?"}
+
+	v.popup = style.FullHelpView([]style.FullHelpContent{
+		{
+			Title:        "View Modes",
+			Items:        items,
+			Order:        order,
+			KeyHighlight: true,
+		},
+	}, width)
+}
+
 func (p viewPage) prevPage() tea.Model {
 	if v, ok := p.prev.(listPage); ok {
 		parentType := p.recordType.GetParentType()
@@ -403,4 +471,15 @@ func (p viewPage) prevPage() tea.Model {
 	}
 
 	return p.prev
+}
+
+func (v *viewPage) viewportDisplay() {
+	if v.width <= viewWidth || v.height <= 28 || !v.fullView {
+		v.viewport.Width = viewWidth
+		v.viewport.Height = 20
+		v.fullView = false
+	} else {
+		v.viewport.Width = v.width
+		v.viewport.Height = v.height - 8
+	}
 }

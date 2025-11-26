@@ -231,10 +231,7 @@ func (p selectorPage) View() string {
 		helper,
 	)
 
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colors.TextMuted).
-		Render(container)
+	return style.BorderStyle["focused"].Render(container)
 }
 
 func selectionView(record yatijappRecord, selected bool, width int) string {

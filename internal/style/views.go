@@ -38,7 +38,7 @@ func TitleBarView(contents []string, width int, msg bool) string {
 		}
 	}
 
-	return BorderStyling.Width(width).Padding(0, 1).Render(title)
+	return BorderStyle["normal"].Width(width).Padding(0, 1).Render(title)
 }
 
 func LoadingView(s *spinner.Model, title string, sizing ViewSize) string {
@@ -120,12 +120,7 @@ func FullHelpView(contents []FullHelpContent, width int) string {
 		}
 	}
 
-	return lipgloss.NewStyle().
-		Width(width).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colors.Text).
-		Padding(0, 1).
-		Render(b.String())
+	return BorderStyle["highlighted"].Width(width).Padding(0, 1).Render(b.String())
 }
 
 func MsgView(sizing ViewSize, msg string) string {

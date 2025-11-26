@@ -483,14 +483,8 @@ func listPageItemDetail(d listItemData, width int) string {
 
 func ListPageDetailView(detail string, dim bool) string {
 	if dim {
-		return lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(colors.BorderMuted).
-			Render(detail)
+		return style.BorderStyle["dimmed"].Render(detail)
 	}
 
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colors.Text).
-		Render(detail)
+	return style.BorderStyle["highlighted"].Render(detail)
 }

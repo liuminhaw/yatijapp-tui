@@ -636,10 +636,7 @@ func (p recordConfigPage) sessionCreateView() string {
 		helper,
 	)
 
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(colors.Text).
-		Render(form)
+	return style.BorderStyle["highlighted"].Render(form)
 }
 
 func (p recordConfigPage) sessionConfigView() string {
