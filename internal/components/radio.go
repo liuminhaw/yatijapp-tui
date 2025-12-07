@@ -35,43 +35,43 @@ func NewRadio(options []string, viewType, width int) Radio {
 	}
 }
 
-func (r *Radio) Blur() {
-	r.focused = false
+func (c *Radio) Blur() {
+	c.focused = false
 }
 
-func (r *Radio) Focus() tea.Cmd {
-	r.focused = true
+func (c *Radio) Focus() tea.Cmd {
+	c.focused = true
 	return nil
 }
 
-func (r Radio) Focused() bool {
-	return r.focused
+func (c Radio) Focused() bool {
+	return c.focused
 }
 
-func (r Radio) Update(msg tea.Msg) (Radio, tea.Cmd) {
-	if !r.focused {
-		return r, nil
+func (c Radio) Update(msg tea.Msg) (Radio, tea.Cmd) {
+	if !c.focused {
+		return c, nil
 	}
 
-	switch r.viewType {
+	switch c.viewType {
 	case RadioListView:
-		return r.listViewUpdate(msg)
+		return c.listViewUpdate(msg)
 	default:
-		return r.defaultUpdate(msg)
+		return c.defaultUpdate(msg)
 	}
 }
 
-func (r Radio) View() string {
-	switch r.viewType {
+func (c Radio) View() string {
+	switch c.viewType {
 	case RadioListView:
-		return r.listView()
+		return c.listView()
 	default:
-		return r.defaultView()
+		return c.defaultView()
 	}
 }
 
-func (r Radio) Selected() string {
-	return r.options[r.selected]
+func (c Radio) Selected() string {
+	return c.options[c.selected]
 }
 
 func (r Radio) Value() string {
@@ -81,90 +81,78 @@ func (r Radio) Value() string {
 	return r.options[r.selected]
 }
 
-func (r *Radio) SetValue(value string) error {
-	for i, option := range r.options {
+func (c *Radio) SetValue(value string) error {
+	for i, option := range c.options {
 		if option == value {
-			r.selected = i
-			r.choice = value
+			c.selected = i
+			c.choice = value
 			return nil
 		}
 	}
 	return fmt.Errorf("value %s not found in options", value)
 }
 
-// func (r Radio) Options() []string {
-// 	return r.options
-// }
-
-func (r Radio) defaultUpdate(msg tea.Msg) (Radio, tea.Cmd) {
+func (c Radio) defaultUpdate(msg tea.Msg) (Radio, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "left", "h":
-			r.selected--
-			if r.selected < 0 {
-				r.selected = len(r.options) - 1
+			c.selected--
+			if c.selected < 0 {
+				c.selected = len(c.options) - 1
 			}
 		case "right", "l":
-			r.selected++
-			if r.selected >= len(r.options) {
-				r.selected = 0
+			c.selected++
+			if c.selected >= len(c.options) {
+				c.selected = 0
 			}
 		case "enter":
-			r.choice = r.options[r.selected]
-			return r, nil // Handle selection logic here if needed
+			c.choice = c.options[c.selected]
+			return c, nil // Handle selection logic here if needed
 		}
 	}
-	return r, nil
+	return c, nil
 }
 
-func (r Radio) listViewUpdate(msg tea.Msg) (Radio, tea.Cmd) {
+func (c Radio) listViewUpdate(msg tea.Msg) (Radio, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
 			for {
-				r.selected--
-				if r.selected < 0 {
-					r.selected = len(r.options) - 1
+				c.selected--
+				if c.selected < 0 {
+					c.selected = len(c.options) - 1
 				}
-				if r.options[r.selected] != "" {
+				if c.options[c.selected] != "" {
 					break
 				}
 			}
 		case "down", "j":
 			for {
-				r.selected++
-				if r.selected >= len(r.options) {
-					r.selected = 0
+				c.selected++
+				if c.selected >= len(c.options) {
+					c.selected = 0
 				}
-				if r.options[r.selected] != "" {
+				if c.options[c.selected] != "" {
 					break
 				}
 			}
 		case "enter":
-			r.choice = r.options[r.selected]
-			return r, nil // Handle selection logic here if needed
+			c.choice = c.options[c.selected]
+			return c, nil // Handle selection logic here if needed
 		}
 	}
-	return r, nil
+	return c, nil
 }
 
-func (r Radio) defaultView() string {
-	options := make([]string, len(r.options))
-	for i, option := range r.options {
-		if i == r.selected {
-			options[i] = style.ChoicesStyle["default"].Choice.Render(
-				"✓ " + option,
-			)
-		} else {
-			options[i] = style.ChoicesStyle["default"].Choices.Render(
-				"- " + option,
-			)
-		}
+func (c Radio) defaultView() string {
+	options := make([]string, len(c.options))
+	for i, option := range c.options {
+		options[i] = choiceFormat(i == c.selected, i == c.selected, c.focused, option)
 	}
 
-	gap, remain, ok := style.CalculateGap(r.width, options...)
+	gap, remain, ok := style.CalculateGap(c.width, options...)
 	if !ok {
 		gap = 1
 		remain = 0
@@ -185,10 +173,10 @@ func (r Radio) defaultView() string {
 	return builder.String()
 }
 
-func (r Radio) listView() string {
-	options := make([]string, len(r.options))
-	for i, option := range r.options {
-		if i == r.selected {
+func (c Radio) listView() string {
+	options := make([]string, len(c.options))
+	for i, option := range c.options {
+		if i == c.selected {
 			options[i] = style.ChoicesStyle["list"].Choice.Width(26).Padding(0, 1).Render(
 				fmt.Sprintf("%s", option),
 			)

@@ -18,7 +18,8 @@ type Focusable interface {
 	Update(tea.Msg) (tea.Model, tea.Cmd)
 	View() string
 	Value() string
-	SetValue(string) error
+	Values() []string
+	SetValues(values ...string) error
 
 	Validate()
 	Error() string
@@ -94,6 +95,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.active = newSignupPage(m.cfg, cmdCreate, style.ViewSize{Width: m.width, Height: m.height}, m.active)
 	case switchToResetPasswordMsg:
 		m.active = newResetPasswordPage(m.cfg, cmdCreate, style.ViewSize{Width: m.width, Height: m.height}, m.active)
+	case switchToFilterMsg:
+		m.active = newFilterPage(m.cfg, msg.f, style.ViewSize{Width: m.width, Height: m.height}, m.active)
 	case switchToTargetsMsg:
 		m.active = newTargetListPage(
 			m.cfg, style.ViewSize{Width: m.width, Height: m.height}, data.RecordParents{}, m.active,

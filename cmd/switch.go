@@ -48,6 +48,8 @@ type (
 	switchToSessionEditMsg struct {
 		record yatijappRecord
 	}
+	switchToFilterMsg struct{ f filter }
+
 	showSessionCreateMsg struct {
 		parents data.RecordParents
 	}
@@ -150,6 +152,12 @@ func switchToTargetViewCmd(uuid string) tea.Cmd {
 func switchToActionViewCmd(uuid string) tea.Cmd {
 	return func() tea.Msg {
 		return switchToActionViewMsg{uuid: uuid}
+	}
+}
+
+func switchToFilterCmd(f filter) tea.Cmd {
+	return func() tea.Msg {
+		return switchToFilterMsg{f: f}
 	}
 }
 

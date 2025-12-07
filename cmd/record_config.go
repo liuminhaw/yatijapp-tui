@@ -85,10 +85,7 @@ func newRecordConfigPage(
 	)
 	description := descriptionField(formWidth, false)
 
-	status := model.NewStatusModel(
-		[]string{"queued", "in progress", "completed", "canceled"},
-		formWidth,
-	)
+	status := model.NewRadioModel(model.StatusOptions, formWidth)
 
 	note := model.NewNoteModel()
 
@@ -104,31 +101,31 @@ func newRecordConfigPage(
 	if record != nil {
 		if record.GetTitle() != "" {
 			recordAction = cmdUpdate
-			name.SetValue(record.GetTitle())
+			name.SetValues(record.GetTitle())
 		}
 
 		due = dueInput(dueDateInputViewWidth, false)
 
 		dueDate, dueDateValid := record.GetDueDate()
 		if dueDateValid {
-			due.SetValue(dueDate.Format("2006-01-02"))
+			due.SetValues(dueDate.Format("2006-01-02"))
 		}
-		description.SetValue(record.GetDescription())
+		description.SetValues(record.GetDescription())
 
-		if err := status.SetValue(record.GetStatus()); err != nil {
+		if err := status.SetValues(record.GetStatus()); err != nil {
 			return recordConfigPage{}, internalErrorMsg{
 				msg: "failed to load " + strings.ToLower(string(recordType)) + " status data",
 				err: err,
 			}
 		}
-		if err := note.SetValue(record.GetNote()); err != nil {
+		if err := note.SetValues(record.GetNote()); err != nil {
 			return recordConfigPage{}, internalErrorMsg{
 				msg: "failed to load " + strings.ToLower(string(recordType)) + " note data",
 				err: err,
 			}
 		}
 
-		if err := parentTarget.SetValue(record.GetParentsTitle()[data.RecordTypeTarget]); err != nil {
+		if err := parentTarget.SetValues(record.GetParentsTitle()[data.RecordTypeTarget]); err != nil {
 			return recordConfigPage{}, internalErrorMsg{
 				msg: "failed to load " + strings.ToLower(
 					string(recordType),
@@ -245,20 +242,20 @@ func newSessionConfigPage(
 	recordAction := cmdCreate
 	focused := 0
 	if record != nil {
-		if err := note.SetValue(record.GetNote()); err != nil {
+		if err := note.SetValues(record.GetNote()); err != nil {
 			return recordConfigPage{}, internalErrorMsg{
 				msg: "failed to load session note data",
 				err: err,
 			}
 		}
 
-		if err := parentTarget.SetValue(record.GetParentsTitle()[data.RecordTypeTarget]); err != nil {
+		if err := parentTarget.SetValues(record.GetParentsTitle()[data.RecordTypeTarget]); err != nil {
 			return recordConfigPage{}, internalErrorMsg{
 				msg: "failed to load session parent target data",
 				err: err,
 			}
 		}
-		if err := parentAction.SetValue(record.GetParentsTitle()[data.RecordTypeAction]); err != nil {
+		if err := parentAction.SetValues(record.GetParentsTitle()[data.RecordTypeAction]); err != nil {
 			return recordConfigPage{}, internalErrorMsg{
 				msg: "failed to load session parent action data",
 				err: err,
@@ -272,9 +269,9 @@ func newSessionConfigPage(
 			recordAction = cmdUpdate
 
 			session := record.(data.Session)
-			startsAt.SetValue(session.StartsAt.Format("2006-01-02 15:04:05"))
+			startsAt.SetValues(session.StartsAt.Format("2006-01-02 15:04:05"))
 			if session.EndsAt.Valid {
-				endsAt.SetValue(session.EndsAt.Time.Format("2006-01-02 15:04:05"))
+				endsAt.SetValues(session.EndsAt.Time.Format("2006-01-02 15:04:05"))
 			}
 
 			focusables = append(focusables, parentTarget, parentAction, startsAt, endsAt, note)
@@ -384,18 +381,18 @@ func (p recordConfigPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case selectorTargetSelectedMsg:
 		p.selector = nil
 		if p.fields[p.focusedCache].Value() != msg.title {
-			p.fields[p.focusedCache].SetValue(msg.title)
+			p.fields[p.focusedCache].SetValues(msg.title)
 			p.hiddenFields["parent_target_title"] = msg.title
 			p.hiddenFields["parent_target_uuid"] = msg.uuid
 			if idx, ok := p.selectorFields[data.RecordTypeAction]; ok {
-				p.fields[idx].SetValue("")
+				p.fields[idx].SetValues("")
 				delete(p.hiddenFields, "parent_action_title")
 				delete(p.hiddenFields, "parent_action_uuid")
 			}
 		}
 	case selectorActionSelectedMsg:
 		p.selector = nil
-		p.fields[p.focusedCache].SetValue(msg.title)
+		p.fields[p.focusedCache].SetValues(msg.title)
 		p.hiddenFields["parent_action_title"] = msg.title
 		p.hiddenFields["parent_action_uuid"] = msg.uuid
 	case data.UnauthorizedApiDataErr:

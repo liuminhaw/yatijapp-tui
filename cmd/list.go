@@ -52,6 +52,8 @@ type listPage struct {
 
 	popupModels []tea.Model
 	popup       string
+
+	filter filter
 }
 
 func newListPage(cfg config, termSize style.ViewSize, prev tea.Model) listPage {
@@ -82,6 +84,7 @@ func newTargetListPage(
 		delete:  deleteTarget,
 	}
 
+	page.selectionFilterQuery(defaultFilter(data.RecordTypeTarget))
 	return page
 }
 
@@ -102,6 +105,7 @@ func newActionListPage(
 		delete:  deleteAction,
 	}
 
+	page.selectionFilterQuery(defaultFilter(data.RecordTypeAction))
 	return page
 }
 
@@ -121,6 +125,7 @@ func newSessionListPage(
 		update:  updateSession,
 	}
 
+	page.selectionFilterQuery(defaultFilter(data.RecordTypeSession))
 	return page
 }
 
@@ -292,6 +297,8 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return l, confirmationCmd
 		case "n":
 			return l, switchToCreateCmd(l.recordType, l.src)
+		case "f":
+			return l, switchToFilterCmd(l.filter)
 		case "m":
 			return l, switchToMenuCmd
 		case "ctrl+r":
@@ -606,4 +613,15 @@ func (l listPage) listPageHelper(width int) string {
 	}
 
 	return style.HelperView(content, width)
+}
+
+func (l *listPage) selectionFilterQuery(f filter) {
+	if f.order == "ascending" {
+		l.selection.query["sort"] = f.sortKey()
+	} else {
+		l.selection.query["sort"] = "-" + f.sortKey()
+	}
+	l.selection.query["status"] = strings.Join(f.status, ",")
+
+	l.filter = f
 }

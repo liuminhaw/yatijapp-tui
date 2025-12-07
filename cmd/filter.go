@@ -1,0 +1,260 @@
+package main
+
+import (
+	"fmt"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/liuminhaw/yatijapp-tui/internal/data"
+	"github.com/liuminhaw/yatijapp-tui/internal/model"
+	"github.com/liuminhaw/yatijapp-tui/internal/style"
+)
+
+type filter struct {
+	recordType data.RecordType
+	sortBy     string
+	order      string
+	status     []string
+}
+
+func (f filter) sortKey() string {
+	switch f.sortBy {
+	case "id":
+		return "serial_id"
+	case "due date":
+		return "due_date"
+	case "created at":
+		return "created_at"
+	case "starts at":
+		return "starts_at"
+	case "updated at":
+		return "updated_at"
+	default:
+		return "last_active"
+	}
+}
+
+func defaultFilter(recordType data.RecordType) filter {
+	filter := filter{
+		recordType: recordType,
+		order:      "descending",
+	}
+
+	// switch record.GetActualType() {
+	switch recordType {
+	case data.RecordTypeTarget, data.RecordTypeAction:
+		filter.sortBy = "last active"
+		filter.status = []string{"queued", "in progress"}
+	case data.RecordTypeSession:
+		filter.sortBy = "starts at"
+		filter.status = []string{"in progress"}
+	}
+
+	return filter
+}
+
+// var defaultFilter = filter{
+// 	sortBy: "last active",
+// 	order:  "desc",
+// 	status: []string{"queued", "in progress"},
+// }
+
+type filterPage struct {
+	cfg config
+
+	fields  []Focusable
+	focused int
+
+	width  int
+	height int
+
+	err  error
+	prev tea.Model
+}
+
+// func newFilterPage(cfg config, size style.ViewSize, prev tea.Model) filterPage {
+func newFilterPage(cfg config, f filter, size style.ViewSize, prev tea.Model) filterPage {
+	focusables := []Focusable{}
+
+	sortOrder := model.NewRadioModel(model.SortOrderOptions, formWidth)
+
+	var sortBy, status Focusable
+	if f.recordType == data.RecordTypeSession {
+		sortBy = model.NewRadioModel(model.SessionSortByOptions, formWidth)
+		status = model.NewCheckboxModel(model.SessionStatusOptions, formWidth)
+	} else {
+		sortBy = model.NewRadioModel(model.SortByOptions, formWidth)
+		status = model.NewCheckboxModel(model.StatusOptions, formWidth)
+	}
+
+	sortBy.SetValues(f.sortBy)
+	sortOrder.SetValues(f.order)
+	status.SetValues(f.status...)
+
+	focusables = append(focusables, sortBy, sortOrder, status)
+	focused := 0
+	focusables[focused].Focus()
+
+	return filterPage{
+		cfg:    cfg,
+		fields: focusables,
+		width:  size.Width,
+		height: size.Height,
+		prev:   prev,
+	}
+}
+
+func (m filterPage) Init() tea.Cmd {
+	return nil
+}
+
+func (m filterPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "tab", "enter":
+			// Cycle through focusable fields
+			m.fields[m.focused].Validate()
+			m.fields[m.focused].Blur()
+			m.focused = (m.focused + 1) % len(m.fields)
+			// m.focusedCache = m.focused
+			return m, m.fields[m.focused].Focus()
+		case "shift+tab":
+			m.fields[m.focused].Validate()
+			m.fields[m.focused].Blur()
+			m.focused = (m.focused - 1 + len(m.fields)) % len(m.fields)
+			// m.focusedCache = m.focused
+			return m, m.fields[m.focused].Focus()
+		case "ctrl+s":
+			return m, switchToPreviousCmd(m.prevPage())
+		case "esc", "ctrl+[":
+			return m, switchToPreviousCmd(m.prev)
+		}
+		if isFnKey(msg) {
+			n, err := fnKeyNumber(msg)
+			if err != nil {
+				panic("failed to get function key number: " + err.Error())
+			}
+			if n >= 1 && n <= len(m.fields) {
+				m.fields[m.focused].Validate()
+				m.fields[m.focused].Blur()
+				m.focused = n - 1
+				// m.focusedCache = m.focused
+				return m, m.fields[m.focused].Focus()
+			}
+		}
+	}
+
+	for i, field := range m.fields {
+		retModel, retCmd := field.Update(msg)
+		m.fields[i] = retModel.(Focusable)
+		if retCmd != nil {
+			cmds = append(cmds, retCmd)
+		}
+	}
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m filterPage) View() string {
+	sortBy := field{idx: 0, obj: m.fields[0]}
+	sortOrder := field{idx: 1, obj: m.fields[1]}
+	status := field{idx: 2, obj: m.fields[2]}
+
+	titleView := style.TitleBarView([]string{"Filter"}, viewWidth, false)
+
+	statusPrompt := status.prompt(
+		status.simpleTitlePrompt(
+			"Status",
+			"(←/→ keys to select, space to toggle selection)",
+			false,
+		),
+		status.simpleTitlePrompt("Status", fmt.Sprintf("<f%d>", status.idx+1), false),
+	)
+
+	filterForm := lipgloss.JoinVertical(
+		lipgloss.Left,
+		lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0).Render(
+			fmt.Sprintf(
+				"%s\n%s\n",
+				sortBy.prompt(
+					sortBy.simpleTitlePrompt("Sort By", "(Use ←/→ keys to select)", false),
+					sortBy.simpleTitlePrompt("Sort By", fmt.Sprintf("<f%d>", sortBy.idx+1), false),
+				),
+				style.FormFieldStyle.Content.Render(sortBy.obj.View()),
+			),
+		),
+
+		style.BorderStyle["normal"].BorderBottom(true).
+			Width(formWidth).
+			Margin(1, 5, 0).
+			Render(
+				fmt.Sprintf(
+					"%s\n%s\n",
+					sortOrder.prompt(
+						sortOrder.simpleTitlePrompt(
+							"Sort Order",
+							"(Use ←/→ keys to select)",
+							false,
+						),
+						sortOrder.simpleTitlePrompt(
+							"Sort Order",
+							fmt.Sprintf("<f%d>", sortOrder.idx+1),
+							false,
+						),
+					),
+					style.FormFieldStyle.Content.Render(sortOrder.obj.View()),
+				),
+			),
+
+		lipgloss.NewStyle().Width(formWidth).Margin(1, 5, 0).Render(
+			fmt.Sprintf(
+				"%s\n%s\n",
+				statusPrompt,
+				style.FormFieldStyle.Content.Render(status.obj.View()),
+			),
+		),
+	)
+
+	helperContent := []style.HelperContent{
+		{Key: "Esc", Action: "back"},
+		{Key: "Tab/Shift+Tab", Action: "navigate"},
+		{Key: "<C-s>", Action: "submit"},
+		{Key: "<C-c>", Action: "quit"},
+	}
+
+	container := lipgloss.JoinVertical(
+		lipgloss.Center,
+		titleView,
+		filterForm,
+		style.HelperView(helperContent, viewWidth),
+	)
+
+	return style.ContainerStyle(m.width, container, 5).Render(container)
+}
+
+func (m filterPage) getFilter() filter {
+	return filter{
+		recordType: m.prev.(listPage).recordType,
+		sortBy:     m.fields[0].Value(),
+		order:      m.fields[1].Value(),
+		status:     m.fields[2].Values(),
+	}
+}
+
+func (m filterPage) prevPage() tea.Model {
+	if v, ok := m.prev.(listPage); ok {
+		// v.filter = m.getFilter()
+
+		v.selectionFilterQuery(m.getFilter())
+		m.cfg.logger.Info("switch to previous page", "prev", fmt.Sprintf("%+v", v.filter))
+		return v
+	}
+
+	return m.prev
+}

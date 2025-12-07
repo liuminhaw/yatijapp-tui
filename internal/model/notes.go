@@ -87,7 +87,16 @@ func (m *NoteModel) Value() string {
 	return m.content
 }
 
-func (m *NoteModel) SetValue(content string) error {
+func (m *NoteModel) Values() []string {
+	return []string{m.content}
+}
+
+func (m *NoteModel) SetValues(vals ...string) error {
+	if len(vals) != 1 {
+		return errors.New("NoteModel expects a single value")
+	}
+	content := vals[0]
+
 	if m.note == nil {
 		note, err := data.NewTempNote("model")
 		if err != nil {

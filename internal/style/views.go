@@ -17,6 +17,8 @@ type ViewSize struct {
 	Height int
 }
 
+// TitleBarView return the title bar with given contents.
+// If msg is true, contents will be rendered as MsgStyle.
 func TitleBarView(contents []string, width int, msg bool) string {
 	title := Document.Highlight.Render("Yatijapp")
 	if len(contents) == 0 {

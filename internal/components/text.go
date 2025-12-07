@@ -1,6 +1,10 @@
 package components
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"errors"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 type TextComponent struct {
 	text    string
@@ -60,8 +64,15 @@ func (t *TextComponent) Value() string {
 	return t.text
 }
 
-func (t *TextComponent) SetValue(value string) error {
-	t.text = value
+func (t *TextComponent) Values() []string {
+	return []string{t.text}
+}
+
+func (t *TextComponent) SetValues(vals ...string) error {
+	if len(vals) != 1 {
+		return errors.New("TextComponent expects a single value")
+	}
+	t.text = vals[0]
 
 	return nil
 }

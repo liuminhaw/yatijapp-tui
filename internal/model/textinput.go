@@ -47,8 +47,15 @@ func (t *TextInputWrapper) Value() string {
 	return t.model.Value()
 }
 
-func (t *TextInputWrapper) SetValue(val string) error {
-	t.model.SetValue(val)
+func (t *TextInputWrapper) Values() []string {
+	return []string{t.model.Value()}
+}
+
+func (t *TextInputWrapper) SetValues(vals ...string) error {
+	if len(vals) != 1 {
+		return errors.New("TextInputWrapper expects a single value")
+	}
+	t.model.SetValue(vals[0])
 
 	return nil
 }
