@@ -228,6 +228,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.active = msg.model
 	case selectorActionSelectedMsg:
 		m.active = msg.model
+	case obtainPreferencesMsg:
+		m.cfg.preferences = &msg.preferences
 	case apiSuccessResponseMsg:
 		m.active = msg.redirect
 	}

@@ -14,15 +14,71 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 )
 
+type authView struct {
+	name     string
+	view     []components.Radio
+	page     int
+	greeting string
+
+	prev *authView
+}
+
+func unauthView() *authView {
+	return &authView{
+		name: "unauth",
+		view: menuView([][]string{
+			{"Sign in", "Sign up", "", "", "Forget password"},
+		}),
+		page: 0,
+		prev: nil,
+	}
+}
+
+func menuAuthView(name string) *authView {
+	return &authView{
+		name: "menu",
+		view: menuView([][]string{
+			{"Targets", "Actions", "Sessions", "", "Sign out"},
+			{"Preferences"},
+		}),
+		page:     0,
+		greeting: fmt.Sprintf("Welcome, %s", name),
+		prev:     nil,
+	}
+}
+
+func preferencesAuthView(prev *authView) *authView {
+	return &authView{
+		name: "preferences",
+		view: menuView([][]string{
+			{"Filter"},
+		}),
+		page:     0,
+		greeting: "Preferences",
+		prev:     prev,
+	}
+}
+
+func filterAuthView(prev *authView) *authView {
+	return &authView{
+		name: "filter",
+		view: menuView([][]string{
+			{"Targets", "Actions", "Sessions"},
+		}),
+		greeting: "Preferences - Filter",
+		prev:     prev,
+	}
+}
+
 type menuPage struct {
 	cfg config
 
-	title    string
-	view     []components.Radio
-	viewPage int
+	title       string
+	view        *authView
+	currentView string
 
-	authView   []components.Radio
-	unauthView []components.Radio
+	authView   *authView
+	unauthView *authView
 
 	width  int
 	height int
@@ -30,26 +86,20 @@ type menuPage struct {
 	spinner spinner.Model
 	loading bool
 
-	greeting string
-	msg      string
-	error    error
+	// greeting string
+	msg   string
+	error error
 }
 
 func newMenuPage(cfg config, width, height int) menuPage {
 	page := menuPage{
-		cfg:   cfg,
-		title: menuTitle(),
-		authView: menuView([][]string{
-			{"Targets", "Actions", "Sessions", "", "Sign out"},
-			// {"Profile", "", "Sign out"},
-		}),
-		unauthView: menuView([][]string{
-			{"Sign in", "Sign up", "", "", "Forget password"},
-		}),
-		width:   width,
-		height:  height,
-		spinner: spinner.New(spinner.WithSpinner(spinner.Meter)),
-		loading: true,
+		cfg:        cfg,
+		title:      menuTitle(),
+		unauthView: unauthView(),
+		width:      width,
+		height:     height,
+		spinner:    spinner.New(spinner.WithSpinner(spinner.Meter)),
+		loading:    true,
 	}
 	page.view = page.unauthView
 
@@ -87,29 +137,64 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "enter":
-			switch m.view[m.viewPage].Selected() {
-			case "Targets":
-				return m, switchToTargetsCmd
-			case "Actions":
-				return m, switchToActionsCmd
-			case "Sessions":
-				return m, switchToSessionsCmd
-			case "Sign out":
-				return m, m.signout()
-			case "Sign in":
-				return m, switchToSigninCmd
-			case "Sign up":
-				return m, switchToSignupCmd
-			case "Forget password":
-				return m, switchToResetPasswordCmd
+			selected := m.view.view[m.view.page].Selected()
+			switch m.view.name {
+			case "menu":
+				switch selected {
+				case "Targets":
+					return m, switchToTargetsCmd
+				case "Actions":
+					return m, switchToActionsCmd
+				case "Sessions":
+					return m, switchToSessionsCmd
+				case "Sign out":
+					return m, m.signout()
+				case "Preferences":
+					// m.cfg.logger.Info("switch to preference", "view", fmt.Sprintf("%+v", m.view))
+					m.authView = preferencesAuthView(m.view)
+					m.view = m.authView
+					// m.cfg.logger.Info("on preference", "prev", fmt.Sprintf("%+v", m.view.prev))
+				}
+			case "unauth":
+				switch selected {
+				case "Sign in":
+					return m, switchToSigninCmd
+				case "Sign up":
+					return m, switchToSignupCmd
+				case "Forget password":
+					return m, switchToResetPasswordCmd
+				}
+			case "preferences":
+				switch selected {
+				case "Filter":
+					m.authView = filterAuthView(m.view)
+					m.view = m.authView
+				}
+			case "filter":
+				switch selected {
+				case "Targets":
+					return m, switchToFilterCmd(m.cfg.preferences.GetFilter(data.RecordTypeTarget))
+				case "Actions":
+					return m, switchToFilterCmd(m.cfg.preferences.GetFilter(data.RecordTypeAction))
+				case "Sessions":
+					return m, switchToFilterCmd(m.cfg.preferences.GetFilter(data.RecordTypeSession))
+				}
 			}
-		case ">":
-			if len(m.view) > 1 {
-				m.viewPage = 1
-			}
+			return m, nil
 		case "<":
-			if len(m.view) > 1 {
-				m.viewPage = 0
+			if m.view.prev != nil {
+				// m.cfg.logger.Info("switch to previous auth view", "prev", fmt.Sprintf("%+v", m.view.prev))
+				m.authView = m.view.prev
+				m.view = m.authView
+			}
+			return m, nil
+		case "right", "l":
+			if len(m.view.view) > 1 {
+				m.view.page = 1
+			}
+		case "left", "h":
+			if len(m.view.view) > 1 {
+				m.view.page = 0
 			}
 		case "up", "down", "k", "j":
 			m.msg = ""
@@ -119,10 +204,29 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.spinner.Tick, m.loadLoginUser())
 	case apiSuccessResponseMsg:
 		if isExactType[menuPage](msg.source) {
-			m.greeting = fmt.Sprintf("Welcome, %s", msg.msg)
+			preferences, err := data.GetPreferences(m.cfg.apiEndpoint, m.cfg.authClient)
+			if err != nil {
+				var ne data.NotFoundApiDataErr
+				if errors.As(err, &ne) {
+					m.cfg.logger.Info("no user preferences found, load default preferences")
+					preferences = data.DefaultPreferences
+				} else {
+					m.cfg.logger.Error("failed to load user preferences")
+					m.error = err
+					return m, cmd
+				}
+			}
+			m.cfg.preferences = &preferences
+			m.cfg.logger.Info(
+				"loaded user preferences",
+				slog.Any("preferences", fmt.Sprintf("preferences: %+v", preferences)),
+			)
+
+			m.authView = menuAuthView(msg.msg)
 			m.view = m.authView
-			m.viewPage = 0
+			m.view.page = 0
 			m.loading = false
+			return m, obtainPreferencesCmd(preferences)
 		} else {
 			m.cfg.logger.Info("menu page receive api success response from other source")
 			m.msg = msg.msg
@@ -130,9 +234,7 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case data.UnauthorizedApiDataErr:
 		m.cfg.logger.Error(msg.Err.Error(), slog.String("action", "load login user"))
-		m.greeting = ""
 		m.view = m.unauthView
-		m.viewPage = 0
 		m.loading = false
 	case data.UnexpectedApiDataErr:
 		m.cfg.logger.Error(msg.Error(), slog.String("action", "load login user"))
@@ -147,7 +249,7 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	m.view[m.viewPage], cmd = m.view[m.viewPage].Update(msg)
+	m.view.view[m.view.page], cmd = m.view.view[m.view.page].Update(msg)
 
 	return m, cmd
 }
@@ -183,7 +285,7 @@ func (m menuPage) View() string {
 		Width(50).
 		Foreground(colors.Primary).
 		Bold(true).
-		Render(m.greeting)
+		Render(m.view.greeting)
 
 	menuTitle := style.BorderStyle["normal"].Width(20).Padding(1, 2).Render(m.title)
 
@@ -195,7 +297,7 @@ func (m menuPage) View() string {
 			AlignVertical(lipgloss.Center).
 			Height(lipgloss.Height(menuTitle)).
 			Margin(0, 1).
-			Render(m.view[m.viewPage].View()),
+			Render(m.view.view[m.view.page].View()),
 	)
 
 	msgView := style.MsgStyle.Width(lipgloss.Width(mainView)).
@@ -207,11 +309,16 @@ func (m menuPage) View() string {
 		{Key: "Enter", Action: "select"},
 		{Key: "q", Action: "quit"},
 	}
-	if len(m.view) > 1 && m.viewPage == 0 {
-		helper = append(helper, style.HelperContent{Key: ">", Action: "more"})
-	} else if len(m.view) > 1 && m.viewPage == 1 {
+	if len(m.view.view) > 1 && m.view.page == 0 {
+		helper = append(helper, style.HelperContent{Key: "→", Action: "more"})
+	} else if len(m.view.view) > 1 && m.view.page == 1 {
+		helper = append(helper, style.HelperContent{Key: "←", Action: "back"})
+	}
+
+	if m.view.prev != nil {
 		helper = append(helper, style.HelperContent{Key: "<", Action: "back"})
 	}
+
 	helperView := style.HelperView(helper, lipgloss.Width(mainView))
 
 	container := lipgloss.JoinVertical(
@@ -226,7 +333,6 @@ func (m menuPage) View() string {
 	containerHeight := lipgloss.Height(container)
 	containerWidthMargin := (m.width - containerWidth) / 2
 	containerHeightMargin := (m.height - containerHeight) / 3
-	// containerHeightMargin := 5 // Fixed margin for better visibility
 
 	return lipgloss.NewStyle().Margin(containerHeightMargin, containerWidthMargin, 0).
 		Render(container)

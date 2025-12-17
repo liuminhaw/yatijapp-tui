@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -53,7 +54,7 @@ type listPage struct {
 	popupModels []tea.Model
 	popup       string
 
-	filter filter
+	filter data.RecordFilter
 }
 
 func newListPage(cfg config, termSize style.ViewSize, prev tea.Model) listPage {
@@ -83,8 +84,12 @@ func newTargetListPage(
 		load:    loadTarget,
 		delete:  deleteTarget,
 	}
+	cfg.logger.Info(
+		"new TargetList page",
+		slog.Any("preferences", fmt.Sprintf("preferences: %+v", cfg.preferences)),
+	)
+	page.selectionFilterQuery(cfg.preferences.GetFilter(data.RecordTypeTarget))
 
-	page.selectionFilterQuery(defaultFilter(data.RecordTypeTarget))
 	return page
 }
 
@@ -104,8 +109,8 @@ func newActionListPage(
 		load:    loadAction,
 		delete:  deleteAction,
 	}
+	page.selectionFilterQuery(cfg.preferences.GetFilter(data.RecordTypeAction))
 
-	page.selectionFilterQuery(defaultFilter(data.RecordTypeAction))
 	return page
 }
 
@@ -124,8 +129,8 @@ func newSessionListPage(
 		delete:  deleteSession,
 		update:  updateSession,
 	}
+	page.selectionFilterQuery(cfg.preferences.GetFilter(data.RecordTypeSession))
 
-	page.selectionFilterQuery(defaultFilter(data.RecordTypeSession))
 	return page
 }
 
@@ -615,13 +620,13 @@ func (l listPage) listPageHelper(width int) string {
 	return style.HelperView(content, width)
 }
 
-func (l *listPage) selectionFilterQuery(f filter) {
-	if f.order == "ascending" {
-		l.selection.query["sort"] = f.sortKey()
+func (l *listPage) selectionFilterQuery(f data.RecordFilter) {
+	if f.Filter.SortOrder == "ascending" {
+		l.selection.query["sort"] = f.Filter.SortKey()
 	} else {
-		l.selection.query["sort"] = "-" + f.sortKey()
+		l.selection.query["sort"] = "-" + f.Filter.SortKey()
 	}
-	l.selection.query["status"] = strings.Join(f.status, ",")
+	l.selection.query["status"] = strings.Join(f.Filter.Status, ",")
 
 	l.filter = f
 }

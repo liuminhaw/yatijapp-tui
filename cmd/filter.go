@@ -10,55 +10,6 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
 )
 
-type filter struct {
-	recordType data.RecordType
-	sortBy     string
-	order      string
-	status     []string
-}
-
-func (f filter) sortKey() string {
-	switch f.sortBy {
-	case "id":
-		return "serial_id"
-	case "due date":
-		return "due_date"
-	case "created at":
-		return "created_at"
-	case "starts at":
-		return "starts_at"
-	case "updated at":
-		return "updated_at"
-	default:
-		return "last_active"
-	}
-}
-
-func defaultFilter(recordType data.RecordType) filter {
-	filter := filter{
-		recordType: recordType,
-		order:      "descending",
-	}
-
-	// switch record.GetActualType() {
-	switch recordType {
-	case data.RecordTypeTarget, data.RecordTypeAction:
-		filter.sortBy = "last active"
-		filter.status = []string{"queued", "in progress"}
-	case data.RecordTypeSession:
-		filter.sortBy = "starts at"
-		filter.status = []string{"in progress"}
-	}
-
-	return filter
-}
-
-// var defaultFilter = filter{
-// 	sortBy: "last active",
-// 	order:  "desc",
-// 	status: []string{"queued", "in progress"},
-// }
-
 type filterPage struct {
 	cfg config
 
@@ -72,14 +23,18 @@ type filterPage struct {
 	prev tea.Model
 }
 
-// func newFilterPage(cfg config, size style.ViewSize, prev tea.Model) filterPage {
-func newFilterPage(cfg config, f filter, size style.ViewSize, prev tea.Model) filterPage {
+func newFilterPage(
+	cfg config,
+	f data.RecordFilter,
+	size style.ViewSize,
+	prev tea.Model,
+) filterPage {
 	focusables := []Focusable{}
 
 	sortOrder := model.NewRadioModel(model.SortOrderOptions, formWidth)
 
 	var sortBy, status Focusable
-	if f.recordType == data.RecordTypeSession {
+	if f.RecordType == data.RecordTypeSession {
 		sortBy = model.NewRadioModel(model.SessionSortByOptions, formWidth)
 		status = model.NewCheckboxModel(model.SessionStatusOptions, formWidth)
 	} else {
@@ -87,9 +42,16 @@ func newFilterPage(cfg config, f filter, size style.ViewSize, prev tea.Model) fi
 		status = model.NewCheckboxModel(model.StatusOptions, formWidth)
 	}
 
-	sortBy.SetValues(f.sortBy)
-	sortOrder.SetValues(f.order)
-	status.SetValues(f.status...)
+	cfg.logger.Info("filter", "filter", fmt.Sprintf("%+v", f.Filter))
+	if err := sortBy.SetValues(f.Filter.SortOption()); err != nil {
+		panic("failed to set sortBy values: " + err.Error())
+	}
+	if err := sortOrder.SetValues(f.Filter.SortOrder); err != nil {
+		panic("failed to set sortOrder values: " + err.Error())
+	}
+	if err := status.SetValues(f.Filter.Status...); err != nil {
+		panic("failed to set status values: " + err.Error())
+	}
 
 	focusables = append(focusables, sortBy, sortOrder, status)
 	focused := 0
@@ -238,12 +200,14 @@ func (m filterPage) View() string {
 	return style.ContainerStyle(m.width, container, 5).Render(container)
 }
 
-func (m filterPage) getFilter() filter {
-	return filter{
-		recordType: m.prev.(listPage).recordType,
-		sortBy:     m.fields[0].Value(),
-		order:      m.fields[1].Value(),
-		status:     m.fields[2].Values(),
+func (m filterPage) getFilter() data.RecordFilter {
+	return data.RecordFilter{
+		RecordType: m.prev.(listPage).recordType,
+		Filter: data.Filter{
+			SortBy:    m.fields[0].Value(),
+			SortOrder: m.fields[1].Value(),
+			Status:    m.fields[2].Values(),
+		},
 	}
 }
 

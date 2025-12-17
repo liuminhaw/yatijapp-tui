@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
+	"github.com/liuminhaw/yatijapp-tui/internal/data"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -19,6 +20,8 @@ type config struct {
 	apiEndpoint string // http://yatijapp.server.url
 
 	displayMode string // light | dark | auto
+
+	preferences *data.Preferences
 
 	logger     *slog.Logger
 	authClient *authclient.AuthClient

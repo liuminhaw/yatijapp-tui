@@ -48,7 +48,8 @@ type (
 		uuid  string
 	}
 
-	cancelPopupMsg struct{}
+	cancelPopupMsg       struct{}
+	obtainPreferencesMsg struct{ preferences data.Preferences }
 )
 
 var (
@@ -97,6 +98,12 @@ func selectorSelectedCmd(
 		}
 
 		panic("unsupported record type in selectorSelectedCmd")
+	}
+}
+
+func obtainPreferencesCmd(preferences data.Preferences) tea.Cmd {
+	return func() tea.Msg {
+		return obtainPreferencesMsg{preferences: preferences}
 	}
 }
 

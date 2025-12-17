@@ -35,6 +35,15 @@ func (e UnexpectedApiDataErr) Error() string {
 	return e.Err.Error()
 }
 
+type NotFoundApiDataErr struct {
+	Err error
+	Msg string
+}
+
+func (e NotFoundApiDataErr) Error() string {
+	return e.Err.Error()
+}
+
 // respErrorCheck checks the error returned from an API request and categorizes it.
 // If the error is checked as an authentication error (e.g., invalid or missing token),
 // it returns a LoadApiDataErr with relevant details. For any other unexpected errors,
