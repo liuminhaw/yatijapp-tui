@@ -1,9 +1,11 @@
 package data
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/liuminhaw/yatijapp-tui/internal/authclient"
@@ -11,7 +13,7 @@ import (
 
 type Filter struct {
 	SortBy    string   `json:"sortBy"`
-	SortOrder string   `json:"sortOrder"`
+	SortOrder string   `json:"sortOrder,omitzero"`
 	Status    []string `json:"status"`
 }
 
@@ -137,6 +139,26 @@ func (p *Preferences) formatApiResponse() {
 	}
 }
 
+func (p *Preferences) formatApiRequest() {
+	p.Filters.Target.SortBy = p.Filters.Target.SortKey()
+	if p.Filters.Target.SortOrder == "descending" {
+		p.Filters.Target.SortBy = "-" + p.Filters.Target.SortBy
+	}
+	p.Filters.Target.SortOrder = ""
+
+	p.Filters.Action.SortBy = p.Filters.Action.SortKey()
+	if p.Filters.Action.SortOrder == "descending" {
+		p.Filters.Action.SortBy = "-" + p.Filters.Action.SortBy
+	}
+	p.Filters.Action.SortOrder = ""
+
+	p.Filters.Session.SortBy = p.Filters.Session.SortKey()
+	if p.Filters.Session.SortOrder == "descending" {
+		p.Filters.Session.SortBy = "-" + p.Filters.Session.SortBy
+	}
+	p.Filters.Session.SortOrder = ""
+}
+
 type PreferencesResponse struct {
 	Preferences Preferences `json:"preferences"`
 }
@@ -195,4 +217,62 @@ func GetPreferences(serverURL string, client *authclient.AuthClient) (Preference
 	responseData.Preferences.formatApiResponse()
 
 	return responseData.Preferences, nil
+}
+
+type PreferencesRequestBody Preferences
+
+func NewPreferencesRequestBody(p Preferences) PreferencesRequestBody {
+	p.formatApiRequest()
+	return PreferencesRequestBody(p)
+}
+
+func (p PreferencesRequestBody) Update(serverURL string, client *authclient.AuthClient) error {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return UnexpectedApiDataErr{
+			Err: err,
+			Msg: "Failed to create request body JSON",
+		}
+	}
+
+	path, err := url.JoinPath(serverURL, "v1", "users", "preferences")
+	if err != nil {
+		return UnexpectedApiDataErr{
+			Err: err,
+			Msg: "Failed to create URL path for PUT Preferences",
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodPut, path, bytes.NewBuffer(data))
+	if err != nil {
+		return UnexpectedApiDataErr{
+			Err: err,
+			Msg: "Failed to create PUT request for Preferences",
+		}
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return respErrorCheck(err, "API request error: PUT Preferences")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var responseErr ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&responseErr); err != nil {
+			return UnexpectedApiDataErr{
+				Err: err,
+				Msg: "API error response decode failure",
+			}
+		}
+
+		return UnauthorizedApiDataErr{
+			Status: resp.StatusCode,
+			Err:    responseErr,
+			Msg:    responseErr.Error(),
+		}
+	}
+
+	return nil
 }

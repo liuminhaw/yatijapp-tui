@@ -13,8 +13,9 @@ import (
 type filterPage struct {
 	cfg config
 
-	fields  []Focusable
-	focused int
+	recordType data.RecordType
+	fields     []Focusable
+	focused    int
 
 	width  int
 	height int
@@ -58,11 +59,12 @@ func newFilterPage(
 	focusables[focused].Focus()
 
 	return filterPage{
-		cfg:    cfg,
-		fields: focusables,
-		width:  size.Width,
-		height: size.Height,
-		prev:   prev,
+		cfg:        cfg,
+		recordType: f.RecordType,
+		fields:     focusables,
+		width:      size.Width,
+		height:     size.Height,
+		prev:       prev,
 	}
 }
 
@@ -202,7 +204,7 @@ func (m filterPage) View() string {
 
 func (m filterPage) getFilter() data.RecordFilter {
 	return data.RecordFilter{
-		RecordType: m.prev.(listPage).recordType,
+		RecordType: m.recordType,
 		Filter: data.Filter{
 			SortBy:    m.fields[0].Value(),
 			SortOrder: m.fields[1].Value(),
@@ -212,11 +214,30 @@ func (m filterPage) getFilter() data.RecordFilter {
 }
 
 func (m filterPage) prevPage() tea.Model {
-	if v, ok := m.prev.(listPage); ok {
-		// v.filter = m.getFilter()
+	filter := m.getFilter()
 
-		v.selectionFilterQuery(m.getFilter())
+	if v, ok := m.prev.(listPage); ok {
+		v.selectionFilterQuery(filter)
 		m.cfg.logger.Info("switch to previous page", "prev", fmt.Sprintf("%+v", v.filter))
+		return v
+	}
+
+	if v, ok := m.prev.(menuPage); ok {
+		switch filter.RecordType {
+		case data.RecordTypeTarget:
+			v.cfg.preferences.Filters.Target = filter.Filter
+		case data.RecordTypeAction:
+			v.cfg.preferences.Filters.Action = filter.Filter
+		case data.RecordTypeSession:
+			v.cfg.preferences.Filters.Session = filter.Filter
+		}
+
+		request := data.NewPreferencesRequestBody(*v.cfg.preferences)
+		if err := request.Update(m.cfg.apiEndpoint, m.cfg.authClient); err != nil {
+			v.error = fmt.Errorf("failed to update preferences: %w", err)
+			return v
+		}
+
 		return v
 	}
 
