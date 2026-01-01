@@ -304,6 +304,8 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return l, switchToCreateCmd(l.recordType, l.src)
 		case "f":
 			return l, switchToFilterCmd(l.filter)
+		case "/":
+			return l, switchToSearchCmd(l.recordType)
 		case "m":
 			return l, switchToMenuCmd
 		case "ctrl+r":
@@ -351,6 +353,10 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		l.cfg.logger.Info("new session popup", slog.Any("record", l.popupModels))
 
+		l.popupModels = append(l.popupModels, popupModel)
+		l.popup = l.popupModels[len(l.popupModels)-1].View()
+	case showSearchMsg:
+		popupModel = newSearchPage(l.cfg, l.recordType, style.ViewSize{Width: l.width, Height: l.height}, l)
 		l.popupModels = append(l.popupModels, popupModel)
 		l.popup = l.popupModels[len(l.popupModels)-1].View()
 	case switchToPreviousMsg:
@@ -447,12 +453,13 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return l, cmd
 	}
 
-	l.selection.p, cmd = l.selection.p.Update(msg)
-	cmds = append(cmds, cmd)
 	if len(l.popupModels) > 0 {
 		lastIndex := len(l.popupModels) - 1
 		l.popupModels[lastIndex], cmd = l.popupModels[lastIndex].Update(msg)
 		l.popup = l.popupModels[lastIndex].View()
+		cmds = append(cmds, cmd)
+	} else if l.popup == "" {
+		l.selection.p, cmd = l.selection.p.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 

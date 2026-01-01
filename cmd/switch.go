@@ -49,6 +49,7 @@ type (
 		record yatijappRecord
 	}
 	switchToFilterMsg struct{ f data.RecordFilter }
+	showSearchMsg     struct{ scope data.RecordType }
 
 	showSessionCreateMsg struct {
 		parents data.RecordParents
@@ -158,6 +159,12 @@ func switchToActionViewCmd(uuid string) tea.Cmd {
 func switchToFilterCmd(f data.RecordFilter) tea.Cmd {
 	return func() tea.Msg {
 		return switchToFilterMsg{f: f}
+	}
+}
+
+func switchToSearchCmd(scope data.RecordType) tea.Cmd {
+	return func() tea.Msg {
+		return showSearchMsg{scope: scope}
 	}
 }
 

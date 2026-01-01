@@ -64,6 +64,7 @@ type Metadata struct {
 }
 
 const (
+	RecordTypeAll     RecordType = "All"
 	RecordTypeTarget  RecordType = "Target"
 	RecordTypeAction  RecordType = "Action"
 	RecordTypeSession RecordType = "Session"

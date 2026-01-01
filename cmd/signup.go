@@ -52,14 +52,20 @@ func (m *signupPage) setFields() {
 		name := usernameInput(signupFormWidth, true)
 		email := emailInput(signupFormWidth, false)
 		password := passwordInput(signupFormWidth, false)
-		passwordConfirm := passwordConfirmField(
+		passwordConfirm := passwordConfirmInput(
 			signupFormWidth,
 			false,
 			password.(*model.TextInputWrapper),
 		)
 		focusables = append(focusables, name, email, password, passwordConfirm)
 	case cmdUpdate:
-		token := tokenInput(signupFormWidth, true, "activation token")
+		token := generalInput(inputFieldConfig{
+			width:       signupFormWidth,
+			focus:       true,
+			placeholder: "activation token",
+			lenMax:      0,
+			validators:  []func(string) error{},
+		})
 		focusables = append(focusables, token)
 	}
 

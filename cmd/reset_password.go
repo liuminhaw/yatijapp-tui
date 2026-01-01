@@ -10,6 +10,7 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
 	"github.com/liuminhaw/yatijapp-tui/internal/model"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
+	"github.com/liuminhaw/yatijapp-tui/internal/validator"
 )
 
 const (
@@ -58,9 +59,17 @@ func (m *resetPasswordPage) setFields() {
 		email := emailInput(resetPasswordFormWidth, true)
 		focusables = append(focusables, email)
 	case cmdUpdate:
-		token := tokenInput(resetPasswordFormWidth, true, "reset token")
+		token := generalInput(inputFieldConfig{
+			width:       resetPasswordFormWidth,
+			focus:       true,
+			placeholder: "reset token",
+			lenMax:      0,
+			validators: []func(string) error{
+				validator.ValidateRequired("required"),
+			},
+		})
 		password := passwordInput(resetPasswordFormWidth, false)
-		passwordConfirm := passwordConfirmField(
+		passwordConfirm := passwordConfirmInput(
 			resetPasswordFormWidth,
 			false,
 			password.(*model.TextInputWrapper),

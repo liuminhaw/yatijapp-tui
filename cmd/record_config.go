@@ -83,7 +83,7 @@ func newRecordConfigPage(
 		false,
 		validator.ValidateDateAfter(time.Now().AddDate(0, 0, -1)),
 	)
-	description := descriptionField(formWidth, false)
+	description := descriptionInput(formWidth, false)
 
 	status := model.NewRadioModel(model.StatusOptions, formWidth)
 

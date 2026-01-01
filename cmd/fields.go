@@ -12,148 +12,155 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/validator"
 )
 
-func nameInput(width int, focus bool, source string) Focusable {
-	maxLen := 80
-	field := textinput.New()
-	field.Prompt = ""
-	field.Placeholder = "Give " + source + " a name"
-	field.Width = width - 1
-	field.CharLimit = maxLen
-	field.Validate = validator.MultipleValidators(
-		validator.ValidateRequired("required"),
-		validator.ValidateMaxLength(maxLen),
-	)
-	if focus {
-		field.Focus()
+type inputFieldConfig struct {
+	width       int
+	focus       bool
+	placeholder string
+	lenMax      int // optional max length limit, 0 means no limit
+	isSecret    bool
+	validators  []func(string) error
+}
+
+func nameInput(width int, focus bool, recordType string) Focusable {
+	c := inputFieldConfig{
+		width:       width,
+		focus:       focus,
+		placeholder: "Give " + recordType + " a name",
+		lenMax:      80,
+		validators: []func(string) error{
+			validator.ValidateRequired("required"),
+			validator.ValidateMaxLength(80),
+		},
 	}
 
-	return model.NewTextInputWrapper(field)
+	return generalInput(c)
 }
 
 func dueInput(width int, focus bool, validators ...func(string) error) Focusable {
-	field := textinput.New()
-	field.Prompt = ""
-	field.Placeholder = "YYYY-mm-dd"
-	field.Width = width - 1
+	c := inputFieldConfig{
+		width:       width,
+		focus:       focus,
+		placeholder: "YYYY-mm-dd",
+		lenMax:      0,
+		validators: []func(string) error{
+			validator.ValidateDateTime(validator.ValidDateFormats),
+		},
+	}
 
-	v := []func(string) error{validator.ValidateDateTime(validator.ValidDateFormats)}
 	for _, validator := range validators {
-		v = append(v, validator)
-	}
-	field.Validate = validator.MultipleValidators(v...)
-	if focus {
-		field.Focus()
+		c.validators = append(c.validators, validator)
 	}
 
-	return model.NewTextInputWrapper(field)
+	return generalInput(c)
 }
 
-func descriptionField(width int, focus bool) Focusable {
-	lenMax := 200
-	field := textinput.New()
-	field.Prompt = ""
-	field.Placeholder = "Information about the record"
-	field.Width = width - 1
-	field.CharLimit = lenMax
-	field.Validate = validator.ValidateReachMaxLength(lenMax)
-	if focus {
-		field.Focus()
+func descriptionInput(width int, focus bool) Focusable {
+	c := inputFieldConfig{
+		width:       width,
+		focus:       focus,
+		placeholder: "Information about the record",
+		lenMax:      200,
+		validators: []func(string) error{
+			validator.ValidateReachMaxLength(200),
+		},
 	}
 
-	return model.NewTextInputWrapper(field)
+	return generalInput(c)
 }
 
 func timeInput(width int, focus bool) Focusable {
-	field := textinput.New()
-	field.Prompt = ""
-	field.Placeholder = "YYYY-mm-dd HH:MM:SS"
-	field.Width = width - 1
-	field.Validate = validator.ValidateDateTime(validator.ValidDateTimeFormats)
-	if focus {
-		field.Focus()
+	c := inputFieldConfig{
+		width:       width,
+		focus:       focus,
+		placeholder: "YYYY-mm-dd HH:MM:SS",
+		lenMax:      0,
+		validators: []func(string) error{
+			validator.ValidateDateTime(validator.ValidDateTimeFormats),
+		},
 	}
 
-	return model.NewTextInputWrapper(field)
+	return generalInput(c)
 }
 
 func emailInput(width int, focus bool) Focusable {
-	field := textinput.New()
-	field.Prompt = ""
-	field.Placeholder = "email"
-	field.Width = width - 1
-	field.Validate = validator.MultipleValidators(
-		validator.ValidateRequired("required"),
-		validator.ValidateEmail(),
-	)
-	if focus {
-		field.Focus()
+	c := inputFieldConfig{
+		width:       width,
+		focus:       focus,
+		placeholder: "email",
+		lenMax:      0,
+		validators: []func(string) error{
+			validator.ValidateRequired("required"),
+			validator.ValidateEmail(),
+		},
 	}
 
-	return model.NewTextInputWrapper(field)
+	return generalInput(c)
 }
 
 func passwordInput(width int, focus bool) Focusable {
-	field := textinput.New()
-	field.EchoMode = textinput.EchoPassword
-	field.Prompt = ""
-	field.Placeholder = "password"
-	field.Width = width - 1
-	field.Validate = validator.MultipleValidators(
-		validator.ValidateRequired("required"),
-		validator.ValidatePasswordLength(8, 72),
-	)
-	if focus {
-		field.Focus()
+	c := inputFieldConfig{
+		width:       width,
+		focus:       focus,
+		placeholder: "password",
+		lenMax:      0,
+		isSecret:    true,
+		validators: []func(string) error{
+			validator.ValidateRequired("required"),
+			validator.ValidatePasswordLength(8, 72),
+		},
 	}
 
-	return model.NewTextInputWrapper(field)
+	return generalInput(c)
 }
 
-func passwordConfirmField(width int, focus bool, match *model.TextInputWrapper) Focusable {
-	field := textinput.New()
-	field.EchoMode = textinput.EchoPassword
-	field.Prompt = ""
-	field.Placeholder = "confirm password"
-	field.Width = width - 1
-	field.Validate = validator.MultipleValidators(
-		validator.ValidateRequired("required"),
-		model.ValidateTextInputMatch(match, "password not match"),
-	)
-	if focus {
-		field.Focus()
+func passwordConfirmInput(width int, focus bool, match *model.TextInputWrapper) Focusable {
+	c := inputFieldConfig{
+		width:       width,
+		focus:       focus,
+		placeholder: "confirm password",
+		lenMax:      0,
+		isSecret:    true,
+		validators: []func(string) error{
+			validator.ValidateRequired("required"),
+			model.ValidateTextInputMatch(match, "password not match"),
+		},
 	}
 
-	return model.NewTextInputWrapper(field)
+	return generalInput(c)
 }
 
 func usernameInput(width int, focus bool) Focusable {
-	field := textinput.New()
-	field.Focus()
-	field.Prompt = ""
-	field.Placeholder = "username"
-	field.Width = width - 1
-	field.Validate = validator.MultipleValidators(
-		validator.ValidateRequired("required"),
-		validator.ValidateMinLength(2),
-		validator.ValidateMaxLength(30),
-	)
-	if focus {
-		field.Focus()
+	c := inputFieldConfig{
+		width:       width,
+		focus:       focus,
+		placeholder: "username",
+		lenMax:      30,
+		validators: []func(string) error{
+			validator.ValidateRequired("required"),
+			validator.ValidateMinLength(2),
+			validator.ValidateMaxLength(30),
+		},
 	}
 
-	return model.NewTextInputWrapper(field)
+	return generalInput(c)
 }
 
-func tokenInput(width int, focus bool, placeholder string) Focusable {
+func generalInput(c inputFieldConfig) Focusable {
 	field := textinput.New()
-	field.Focus()
 	field.Prompt = ""
-	field.Placeholder = placeholder
-	field.Width = width - 1
-	field.Validate = validator.ValidateRequired("required")
-	if focus {
+	field.Placeholder = c.placeholder
+	field.Width = c.width - 1
+
+	if c.isSecret {
+		field.EchoMode = textinput.EchoPassword
+	}
+	if c.focus {
 		field.Focus()
 	}
+	if c.lenMax > 0 {
+		field.CharLimit = c.lenMax
+	}
+	field.Validate = validator.MultipleValidators(c.validators...)
 
 	return model.NewTextInputWrapper(field)
 }
