@@ -23,6 +23,7 @@ func newSearchPage(
 	cfg config,
 	scope data.RecordType,
 	size style.ViewSize,
+	content string,
 	prev tea.Model,
 ) searchPage {
 	fieldWidth := formWidth - 2
@@ -36,6 +37,10 @@ func newSearchPage(
 			validator.ValidateMaxLength(fieldWidth - 1),
 		},
 	})
+
+	if content != "" {
+		field.SetValues(content)
+	}
 
 	return searchPage{
 		cfg:    cfg,
@@ -59,6 +64,8 @@ func (s searchPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, tea.Quit
 		case "esc", "ctrl+[":
 			return s, switchToPreviousCmd(s.prev)
+		case "enter":
+			return s, switchToPreviousCmd(s.prevPage())
 		}
 	}
 
@@ -106,4 +113,15 @@ func (s searchPage) View() string {
 	)
 
 	return style.BorderStyle["highlighted"].Width(formWidth).Render(form)
+}
+
+func (s searchPage) prevPage() tea.Model {
+	search := s.field.Value()
+
+	if v, ok := s.prev.(listPage); ok {
+		v.selectionSearchQuery(search)
+		return v
+	}
+
+	panic("previous page is not listPage")
 }

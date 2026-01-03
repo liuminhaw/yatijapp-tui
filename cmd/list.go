@@ -356,7 +356,10 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l.popupModels = append(l.popupModels, popupModel)
 		l.popup = l.popupModels[len(l.popupModels)-1].View()
 	case showSearchMsg:
-		popupModel = newSearchPage(l.cfg, l.recordType, style.ViewSize{Width: l.width, Height: l.height}, l)
+		search := l.selection.query["search"]
+		popupModel = newSearchPage(
+			l.cfg, msg.scope, style.ViewSize{Width: l.width, Height: l.height}, search, l,
+		)
 		l.popupModels = append(l.popupModels, popupModel)
 		l.popup = l.popupModels[len(l.popupModels)-1].View()
 	case switchToPreviousMsg:
@@ -576,10 +579,11 @@ func (l *listPage) helperPopup(width int) {
 		"d":     "Delete " + strings.ToLower(recordType),
 		"f":     "Filter",
 		"m":     "Menu",
+		"/":     "Search",
 		"<C-r>": "Refresh",
 		"?":     "Toggle helper",
 	}
-	order := []string{"<", "↑/↓", "q", "n", "v", "e", "d", "f", "m", "<C-r>", "?"}
+	order := []string{"<", "↑/↓", "q", "n", "v", "e", "d", "f", "m", "/", "<C-r>", "?"}
 
 	var enterValue string
 	if l.recordType == data.RecordTypeSession && l.selection.hasRecords() &&
@@ -636,4 +640,8 @@ func (l *listPage) selectionFilterQuery(f data.RecordFilter) {
 	l.selection.query["status"] = strings.Join(f.Filter.Status, ",")
 
 	l.filter = f
+}
+
+func (l *listPage) selectionSearchQuery(k string) {
+	l.selection.query["search"] = k
 }
