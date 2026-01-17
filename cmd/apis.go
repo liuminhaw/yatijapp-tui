@@ -82,6 +82,32 @@ func loadMoreRecords(direction string) tea.Cmd {
 	}
 }
 
+func loadAllRecords(
+	info data.ListRequestInfo,
+	msg, src string,
+	client *authclient.AuthClient,
+) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := data.ListRecords(info, client)
+		if err != nil {
+			return err
+		}
+
+		records := make([]yatijappRecord, len(resp.Records))
+		for i, record := range resp.Records {
+			records[i] = record
+		}
+
+		return allRecordsLoadedMsg{
+			metadata: resp.Metadata,
+			records:  records,
+			src:      src,
+			msg:      msg,
+			events:   info.Events,
+		}
+	}
+}
+
 func loadAllTargets(
 	info data.ListRequestInfo,
 	msg, src string,
@@ -157,6 +183,23 @@ func loadAllSessions(
 			msg:      msg,
 			events:   info.Events,
 		}
+	}
+}
+
+func loadRecord(
+	serverURL, uuid, msg string,
+	rt data.RecordType,
+	client *authclient.AuthClient,
+) tea.Cmd {
+	switch rt {
+	case data.RecordTypeTarget:
+		return loadTarget(serverURL, uuid, msg, client)
+	case data.RecordTypeAction:
+		return loadAction(serverURL, uuid, msg, client)
+	case data.RecordTypeSession:
+		return loadSession(serverURL, uuid, msg, client)
+	default:
+		panic("unsupported record type in loadRecord")
 	}
 }
 

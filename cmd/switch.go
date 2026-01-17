@@ -48,9 +48,10 @@ type (
 	switchToSessionEditMsg struct {
 		record yatijappRecord
 	}
-	switchToFilterMsg struct{ f data.RecordFilter }
-	showSearchMsg     struct{ scope data.RecordType }
+	switchToFilterMsg     struct{ f data.RecordFilter }
+	switchToSearchListMsg struct{ query string }
 
+	showSearchMsg        struct{ scope data.RecordType }
 	showSessionCreateMsg struct {
 		parents data.RecordParents
 	}
@@ -165,6 +166,12 @@ func switchToFilterCmd(f data.RecordFilter) tea.Cmd {
 func switchToSearchCmd(scope data.RecordType) tea.Cmd {
 	return func() tea.Msg {
 		return showSearchMsg{scope: scope}
+	}
+}
+
+func switchToSearchListCmd(q string) tea.Cmd {
+	return func() tea.Msg {
+		return switchToSearchListMsg{query: q}
 	}
 }
 

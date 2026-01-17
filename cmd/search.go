@@ -65,6 +65,9 @@ func (s searchPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc", "ctrl+[":
 			return s, switchToPreviousCmd(s.prev)
 		case "enter":
+			if s.scope == data.RecordTypeAll {
+				return s, switchToSearchListCmd(s.field.Value())
+			}
 			return s, switchToPreviousCmd(s.prevPage())
 		}
 	}

@@ -224,6 +224,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchToTargetSelectorMsg:
 		m.active = newTargetSelectorPage(m.cfg, style.ViewSize{Width: m.width, Height: m.height}, m.active)
 		return m, m.active.Init()
+	case switchToSearchListMsg:
+		m.active = newSearchListPage(m.cfg,
+			msg.query,
+			style.ViewSize{Width: m.width, Height: m.height},
+			m.active,
+		)
+		return m, m.active.Init()
 	case selectorTargetSelectedMsg:
 		m.active = msg.model
 	case selectorActionSelectedMsg:

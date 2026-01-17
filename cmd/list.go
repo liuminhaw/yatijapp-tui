@@ -21,7 +21,7 @@ import (
 
 type listHooks struct {
 	loadAll func(info data.ListRequestInfo, msg, src string, client *authclient.AuthClient) tea.Cmd
-	load    func(serverURL, uuid, msg string, client *authclient.AuthClient) tea.Cmd
+	load    func(serverURL, uuid, msg string, rt data.RecordType, client *authclient.AuthClient) tea.Cmd
 	delete  func(serverURL, uuid string, client *authclient.AuthClient) tea.Cmd
 	update  func(
 		serverURL, msg string,
@@ -81,7 +81,7 @@ func newTargetListPage(
 	page.src = src
 	page.hooks = listHooks{
 		loadAll: loadAllTargets,
-		load:    loadTarget,
+		load:    loadRecord,
 		delete:  deleteTarget,
 	}
 	cfg.logger.Info(
@@ -106,7 +106,7 @@ func newActionListPage(
 	page.src = src
 	page.hooks = listHooks{
 		loadAll: loadAllActions,
-		load:    loadAction,
+		load:    loadRecord,
 		delete:  deleteAction,
 	}
 	page.selectionFilterQuery(cfg.preferences.GetFilter(data.RecordTypeAction))
@@ -125,7 +125,7 @@ func newSessionListPage(
 	page.src = src
 	page.hooks = listHooks{
 		loadAll: loadAllSessions,
-		load:    loadSession,
+		load:    loadRecord,
 		delete:  deleteSession,
 		update:  updateSession,
 	}
@@ -266,7 +266,9 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				l.loading = true
 				l.clearMsg()
-				return l, l.hooks.load(l.cfg.apiEndpoint, selected.GetUUID(), "", l.cfg.authClient)
+				return l, l.hooks.load(
+					l.cfg.apiEndpoint, selected.GetUUID(), "", selected.GetActualType(), l.cfg.authClient,
+				)
 			}
 		case "d":
 			selected := l.selection.current()
@@ -306,6 +308,8 @@ func (l listPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return l, switchToFilterCmd(l.filter)
 		case "/":
 			return l, switchToSearchCmd(l.recordType)
+		case "ctrl+/", "ctrl+_":
+			return l, switchToSearchCmd(data.RecordTypeAll)
 		case "m":
 			return l, switchToMenuCmd
 		case "ctrl+r":
@@ -580,10 +584,11 @@ func (l *listPage) helperPopup(width int) {
 		"f":     "Filter",
 		"m":     "Menu",
 		"/":     "Search",
+		"<C-/>": "Search all",
 		"<C-r>": "Refresh",
 		"?":     "Toggle helper",
 	}
-	order := []string{"<", "↑/↓", "q", "n", "v", "e", "d", "f", "m", "/", "<C-r>", "?"}
+	order := []string{"<", "↑/↓", "q", "n", "v", "e", "d", "f", "m", "/", "<C-/>", "<C-r>", "?"}
 
 	var enterValue string
 	if l.recordType == data.RecordTypeSession && l.selection.hasRecords() &&
@@ -644,4 +649,8 @@ func (l *listPage) selectionFilterQuery(f data.RecordFilter) {
 
 func (l *listPage) selectionSearchQuery(k string) {
 	l.selection.query["search"] = k
+}
+
+func (l *listPage) selectionSearchClear() {
+	delete(l.selection.query, "search")
 }

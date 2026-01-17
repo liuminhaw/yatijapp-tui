@@ -83,6 +83,10 @@ func (rt RecordType) GetParentType() RecordType {
 	}
 }
 
+func (rt RecordType) ToLower() RecordType {
+	return RecordType(strings.ToLower(string(rt)))
+}
+
 type RecordParent struct {
 	UUID  string
 	Title string
@@ -101,6 +105,63 @@ func (rp RecordParents) UUID(recordType RecordType) string {
 func (rp RecordParents) Title(recordType RecordType) string {
 	return rp[recordType].Title
 }
+
+type Record struct {
+	Kind        RecordType   `json:"kind"`
+	UUID        string       `json:"uuid"`
+	Title       string       `json:"title"`
+	Description string       `json:"description"`
+	Status      string       `json:"status"`
+	HasNotes    bool         `json:"has_notes"`
+	LastActive  time.Time    `json:"last_active"`
+	StartsAt    sql.NullTime `json:"starts_at"`
+	EndsAt      sql.NullTime `json:"ends_at"`
+}
+
+func (r Record) ListItemView(hasSrc, chosen bool, width int) string {
+	titleInfo := r.Title
+	if r.Kind == RecordTypeSession.ToLower() {
+		titleInfo = sessionTitle(r.StartsAt.Time, r.EndsAt)
+	} else {
+		titleInfo = r.Title
+	}
+
+	return listPageItemView(listItemData{
+		title:  titleInfo,
+		status: r.Status,
+	}, chosen, width)
+}
+
+func (r Record) ListItemDetailView(hasSrc bool, width int) string {
+	d := listItemData{
+		title:    r.GetTitle(),
+		status:   r.GetStatus(),
+		itemType: r.GetActualType(),
+		hasNotes: r.HasNotes,
+	}
+
+	return listPageItemDetail(d, width)
+}
+
+func (r Record) GetActualType() RecordType     { return r.Kind }
+func (r Record) GetUUID() string               { return r.UUID }
+func (r Record) GetTitle() string              { return r.Title }
+func (r Record) GetDescription() string        { return r.Description }
+func (r Record) GetStatus() string             { return r.Status }
+func (r Record) GetNote() string               { return "" }
+func (r Record) GetDueDate() (time.Time, bool) { return time.Time{}, false }
+func (r Record) GetCreatedAt() time.Time       { return time.Time{} }
+func (r Record) GetUpdatedAt() time.Time       { return time.Time{} }
+func (r Record) GetLastActive() time.Time      { return r.LastActive }
+func (r Record) GetParentsUUID() map[RecordType]string {
+	return map[RecordType]string{}
+}
+
+func (r Record) GetParentsTitle() map[RecordType]string {
+	return map[RecordType]string{}
+}
+func (r Record) GetChildrenCount() int64 { return 0 }
+func (r Record) HasNote() bool           { return r.HasNotes }
 
 type Target struct {
 	UUID         string       `json:"uuid"`
@@ -299,13 +360,7 @@ func (s Session) ListItemDetailView(hasSrc bool, width int) string {
 func (s Session) GetActualType() RecordType { return RecordTypeSession }
 func (s Session) GetUUID() string           { return s.UUID }
 func (s Session) GetTitle() string {
-	startStr := s.StartsAt.Local().Format("2006-01-02 15:04:05")
-	endStr := "--"
-	if s.EndsAt.Valid {
-		endStr = s.EndsAt.Time.Local().Format("2006-01-02 15:04:05")
-	}
-
-	return fmt.Sprintf("%s → %s", startStr, endStr)
+	return sessionTitle(s.StartsAt, s.EndsAt)
 }
 func (s Session) GetDescription() string { return "" }
 func (s Session) GetStatus() string {
@@ -488,4 +543,14 @@ func ListPageDetailView(detail string, dim bool) string {
 	}
 
 	return style.BorderStyle["highlighted"].Render(detail)
+}
+
+func sessionTitle(startsAt time.Time, endsAt sql.NullTime) string {
+	startStr := startsAt.Local().Format("2006-01-02 15:04:05")
+	endStr := "--"
+	if endsAt.Valid {
+		endStr = endsAt.Time.Local().Format("2006-01-02 15:04:05")
+	}
+
+	return fmt.Sprintf("%s → %s", startStr, endStr)
 }
