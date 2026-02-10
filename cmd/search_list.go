@@ -281,7 +281,12 @@ func (s searchListPage) prevPage() tea.Model {
 		v.selectionSearchClear()
 
 		return v
+	} else if v, ok := s.prev.(menuPage); ok {
+		v.popupModels = []tea.Model{}
+		v.popup = ""
+
+		return v
 	}
 
-	panic("previous page is not listPage")
+	panic("previous page is not supported")
 }

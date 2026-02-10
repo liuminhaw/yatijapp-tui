@@ -12,6 +12,7 @@ import (
 	"github.com/liuminhaw/yatijapp-tui/internal/components"
 	"github.com/liuminhaw/yatijapp-tui/internal/data"
 	"github.com/liuminhaw/yatijapp-tui/internal/style"
+	"github.com/liuminhaw/yatijapp-tui/pkg/strview"
 )
 
 type authView struct {
@@ -86,6 +87,9 @@ type menuPage struct {
 	spinner spinner.Model
 	loading bool
 
+	popupModels []tea.Model
+	popup       string
+
 	// greeting string
 	msg   string
 	error error
@@ -93,13 +97,14 @@ type menuPage struct {
 
 func newMenuPage(cfg config, width, height int) menuPage {
 	page := menuPage{
-		cfg:        cfg,
-		title:      menuTitle(),
-		unauthView: unauthView(),
-		width:      width,
-		height:     height,
-		spinner:    spinner.New(spinner.WithSpinner(spinner.Meter)),
-		loading:    true,
+		cfg:         cfg,
+		title:       menuTitle(),
+		unauthView:  unauthView(),
+		width:       width,
+		height:      height,
+		spinner:     spinner.New(spinner.WithSpinner(spinner.Meter)),
+		loading:     true,
+		popupModels: []tea.Model{},
 	}
 	page.view = page.unauthView
 
@@ -133,6 +138,9 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case tea.KeyMsg:
+		if m.popup != "" {
+			break
+		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
@@ -181,6 +189,8 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+		case "ctrl+/", "ctrl+_":
+			return m, switchToSearchCmd(data.RecordTypeAll)
 		case "<":
 			if m.view.prev != nil {
 				// m.cfg.logger.Info("switch to previous auth view", "prev", fmt.Sprintf("%+v", m.view.prev))
@@ -199,6 +209,12 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "down", "k", "j":
 			m.msg = ""
 		}
+	case showSearchMsg:
+		popupModel := newSearchPage(
+			m.cfg, msg.scope, style.ViewSize{Width: m.width, Height: m.height}, "", m,
+		)
+		m.popupModels = append(m.popupModels, popupModel)
+		m.popup = m.popupModels[len(m.popupModels)-1].View()
 	case switchToPreviousMsg:
 		m.loading = true
 		return m, tea.Batch(m.spinner.Tick, m.loadLoginUser())
@@ -246,6 +262,13 @@ func (m menuPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 	case spinner.TickMsg:
 		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
+
+	if len(m.popupModels) > 0 {
+		lastIndex := len(m.popupModels) - 1
+		m.popupModels[lastIndex], cmd = m.popupModels[lastIndex].Update(msg)
+		m.popup = m.popupModels[lastIndex].View()
 		return m, cmd
 	}
 
@@ -307,6 +330,7 @@ func (m menuPage) View() string {
 	helper := []style.HelperContent{
 		{Key: "↑/↓", Action: "navigate"},
 		{Key: "Enter", Action: "select"},
+		{Key: "ctrl+/", Action: "search"},
 		{Key: "q", Action: "quit"},
 	}
 	if len(m.view.view) > 1 && m.view.page == 0 {
@@ -319,7 +343,7 @@ func (m menuPage) View() string {
 		helper = append(helper, style.HelperContent{Key: "<", Action: "back"})
 	}
 
-	helperView := style.HelperView(helper, lipgloss.Width(mainView))
+	helperView := style.HelperView(helper, lipgloss.Width(mainView)+20)
 
 	container := lipgloss.JoinVertical(
 		lipgloss.Center,
@@ -334,8 +358,20 @@ func (m menuPage) View() string {
 	containerWidthMargin := (m.width - containerWidth) / 2
 	containerHeightMargin := (m.height - containerHeight) / 3
 
-	return lipgloss.NewStyle().Margin(containerHeightMargin, containerWidthMargin, 0).
+	container = lipgloss.NewStyle().
+		Margin(0, containerWidthMargin, 0).
 		Render(container)
+
+	if m.popup != "" {
+		overlayX := lipgloss.Width(container)/2 - lipgloss.Width(m.popup)/2
+		overlayY := lipgloss.Height(container)/2 - lipgloss.Height(m.popup)/2
+		container = strview.PlaceOverlay(overlayX, overlayY, m.popup, container)
+	}
+	container = lipgloss.NewStyle().
+		Margin(containerHeightMargin, 0, 0).
+		Render(container)
+
+	return container
 }
 
 func (m menuPage) signout() tea.Cmd {
