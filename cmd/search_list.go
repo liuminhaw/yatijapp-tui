@@ -93,6 +93,27 @@ func (s searchListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, s.selection.nextPage()
 		case "left", "h":
 			return s, s.selection.prevPage()
+		case "enter":
+			if !s.selection.hasRecords() {
+				break
+			}
+			s.cfg.logger.Info("Enter pressed in search list page")
+			selected := s.selection.current()
+			s.cfg.logger.Info("Actual type of selected record", slog.String("type", string(selected.GetActualType())))
+			switch selected.GetActualType() {
+			case data.RecordTypeTarget, data.RecordTypeAction:
+				return s, switchToRecordsCmd(selected)
+			}
+		case "e":
+			selected := s.selection.current()
+			if selected == nil {
+				break
+			}
+
+			s.loading = true
+			return s, s.hooks.load(
+				s.cfg.apiEndpoint, selected.GetUUID(), "", selected.GetActualType(), s.cfg.authClient,
+			)
 		case "<":
 			if s.error != nil {
 				s.error = nil
@@ -123,6 +144,9 @@ func (s searchListPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			},
 			"", "searchList", s.cfg.authClient,
 		)
+	case getRecordLoadedMsg:
+		s.loading = false
+		return s, switchToEditCmd(s.selection.current().GetActualType(), msg.record)
 	case data.UnauthorizedApiDataErr:
 		s.cfg.logger.Error(
 			msg.Error(),
@@ -241,8 +265,10 @@ func (s searchListPage) listPageHelper(width int) string {
 		{Key: "?", Action: "toggle help"},
 	}
 
-	if s.selection.records[s.selection.selected].GetActualType() != data.RecordTypeSession {
-		content = slices.Insert(content, 2, style.HelperContent{Key: "Enter", Action: "select"})
+	if len(s.selection.records) > 0 {
+		if s.selection.records[s.selection.selected].GetActualType() != data.RecordTypeSession {
+			content = slices.Insert(content, 2, style.HelperContent{Key: "Enter", Action: "select"})
+		}
 	}
 
 	return style.HelperView(content, width)

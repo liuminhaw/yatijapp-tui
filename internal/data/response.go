@@ -143,7 +143,14 @@ func (r Record) ListItemDetailView(hasSrc bool, width int) string {
 	return listPageItemDetail(d, width)
 }
 
-func (r Record) GetActualType() RecordType     { return r.Kind }
+func (r Record) GetActualType() RecordType {
+	if len(r.Kind) == 0 {
+		panic("record kind is empty")
+	}
+
+	kind := string(r.Kind)
+	return RecordType(strings.ToUpper(kind[:1]) + kind[1:])
+}
 func (r Record) GetUUID() string               { return r.UUID }
 func (r Record) GetTitle() string              { return r.Title }
 func (r Record) GetDescription() string        { return r.Description }
